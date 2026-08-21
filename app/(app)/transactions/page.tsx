@@ -6,6 +6,7 @@ import { ErrorState } from "@/components/common/PageStates";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { Pagination } from "@/components/common/Pagination";
 import { StatusBadge } from "@/components/ui/status_badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -13,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ReverseTxnDialog } from "@/components/txn/ReverseTxnDialog";
 import { formatMoney, formatDate } from "@/lib/format";
 import type { Paginated, TransactionKind, TransactionRow } from "@/types/admin";
 
@@ -29,6 +31,7 @@ const KIND_LABELS: Record<TransactionKind, string> = {
 export default function TransactionsPage() {
   const [page, setPage] = React.useState(1);
   const [kind, setKind] = React.useState<"" | TransactionKind>("");
+  const [reversingTxn, setReversingTxn] = React.useState<TransactionRow | null>(null);
 
   const { data, loading, error, refetch } = useAdminResource<Paginated<TransactionRow>>(
     "/admin/transactions/",
@@ -68,6 +71,18 @@ export default function TransactionsPage() {
       render: (t) => formatMoney(t.mtaji_after),
     },
     { key: "date", header: "Date", render: (t) => formatDate(t.date) },
+    {
+      key: "actions",
+      header: "",
+      className: "text-right",
+      render: (t) => (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={() => setReversingTxn(t)}>
+            Reverse
+          </Button>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -112,6 +127,18 @@ export default function TransactionsPage() {
           ) : null}
         </>
       )}
+
+      <ReverseTxnDialog
+        open={!!reversingTxn}
+        onOpenChange={(o) => {
+          if (!o) setReversingTxn(null);
+        }}
+        txn={reversingTxn}
+        onDone={() => {
+          setReversingTxn(null);
+          void refetch();
+        }}
+      />
     </>
   );
 }

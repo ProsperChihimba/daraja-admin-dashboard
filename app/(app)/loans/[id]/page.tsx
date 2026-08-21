@@ -7,7 +7,9 @@ import { ErrorState, LoadingBlock } from "@/components/common/PageStates";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { StatusBadgeFor } from "@/components/common/StatusBadgeFor";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { StatTile } from "@/components/overview/StatTile";
+import { AdjustLoanDialog } from "@/components/loan/AdjustLoanDialog";
 import { formatMoney, formatDate } from "@/lib/format";
 import type { LoanDetail, RepaymentLike } from "@/types/admin";
 
@@ -16,6 +18,7 @@ export default function LoanDetailPage() {
   const { data: loan, loading, error, refetch } = useAdminResource<LoanDetail>(
     `/admin/loans/${id}/`,
   );
+  const [adjustOpen, setAdjustOpen] = React.useState(false);
 
   const repaymentColumns: Column<RepaymentLike>[] = [
     { key: "payment_no", header: "#", render: (r) => r.payment_no ?? "—" },
@@ -76,7 +79,14 @@ export default function LoanDetailPage() {
       <PageHeader
         title={`Loan ${loan.loan_id}`}
         subtitle={`${loan.borrower_name ?? "—"} · ${loan.organization?.name ?? "—"}`}
-        actions={<StatusBadgeFor status={loan.status} kind="loan" />}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setAdjustOpen(true)}>
+              Adjust
+            </Button>
+            <StatusBadgeFor status={loan.status} kind="loan" />
+          </>
+        }
       />
 
       <div className="flex flex-col gap-4">
@@ -214,6 +224,23 @@ export default function LoanDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AdjustLoanDialog
+        open={adjustOpen}
+        onOpenChange={setAdjustOpen}
+        loan={{
+          id: loan.id,
+          loan_id: loan.loan_id,
+          status: loan.status,
+          outstanding: loan.outstanding,
+          amount_paid: loan.amount_paid,
+          total_payable: loan.total_payable,
+        }}
+        onDone={() => {
+          setAdjustOpen(false);
+          void refetch();
+        }}
+      />
     </>
   );
 }
