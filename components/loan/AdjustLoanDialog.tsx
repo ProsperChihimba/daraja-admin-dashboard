@@ -149,7 +149,7 @@ export function AdjustLoanDialog({ open, onOpenChange, loan, onDone }: AdjustLoa
           <DialogTitle>Adjust loan {loan.loan_id}</DialogTitle>
         </DialogHeader>
 
-        <div className="rounded-lg border border-warning-bg bg-warning-bg/40 px-3 py-2 text-xs text-warning-fg">
+        <div className="rounded-card border border-warning-bg bg-warning-bg/40 px-3 py-2 text-xs text-warning-fg">
           Direct loan-record correction. Use only to fix data errors; this does not create ledger
           movements. Recorded in the audit log.
         </div>

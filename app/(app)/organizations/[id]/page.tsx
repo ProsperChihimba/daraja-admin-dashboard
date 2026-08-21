@@ -57,7 +57,7 @@ export default function OrganizationDetailPage() {
     },
   ];
 
-  if (loading || !org) {
+  if (loading && !org) {
     return (
       <>
         <PageHeader title="Organization" />
@@ -66,7 +66,7 @@ export default function OrganizationDetailPage() {
     );
   }
 
-  if (error) {
+  if (error && !org) {
     return (
       <>
         <PageHeader title="Organization" />
@@ -74,6 +74,8 @@ export default function OrganizationDetailPage() {
       </>
     );
   }
+
+  if (!org) return null;
 
   const subtitle = [org.region, org.district].filter(Boolean).join(" · ") || undefined;
   const isActive = org.status === "active";

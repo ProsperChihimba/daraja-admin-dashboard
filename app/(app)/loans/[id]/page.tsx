@@ -54,7 +54,7 @@ export default function LoanDetailPage() {
     },
   ];
 
-  if (loading || !loan) {
+  if (loading && !loan) {
     return (
       <>
         <PageHeader title="Loan" />
@@ -63,7 +63,7 @@ export default function LoanDetailPage() {
     );
   }
 
-  if (error) {
+  if (error && !loan) {
     return (
       <>
         <PageHeader title="Loan" />
@@ -71,6 +71,8 @@ export default function LoanDetailPage() {
       </>
     );
   }
+
+  if (!loan) return null;
 
   const collateral = loan.collateral;
 

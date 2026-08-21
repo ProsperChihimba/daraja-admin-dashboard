@@ -39,7 +39,7 @@ export default function BorrowerDetailPage() {
     { key: "end_date", header: "End", render: (l) => formatDate(l.end_date) },
   ];
 
-  if (loading || !b) {
+  if (loading && !b) {
     return (
       <>
         <PageHeader title="Borrower" />
@@ -48,7 +48,7 @@ export default function BorrowerDetailPage() {
     );
   }
 
-  if (error) {
+  if (error && !b) {
     return (
       <>
         <PageHeader title="Borrower" />
@@ -56,6 +56,8 @@ export default function BorrowerDetailPage() {
       </>
     );
   }
+
+  if (!b) return null;
 
   const initials = (b.full_name ?? "?")
     .split(" ")

@@ -127,7 +127,7 @@ export default function IssueDetailPage() {
     }
   };
 
-  if (loading || !issue) {
+  if (loading && !issue) {
     return (
       <>
         <PageHeader title="Issue" />
@@ -136,7 +136,7 @@ export default function IssueDetailPage() {
     );
   }
 
-  if (error) {
+  if (error && !issue) {
     return (
       <>
         <PageHeader title="Issue" />
@@ -144,6 +144,8 @@ export default function IssueDetailPage() {
       </>
     );
   }
+
+  if (!issue) return null;
 
   return (
     <>

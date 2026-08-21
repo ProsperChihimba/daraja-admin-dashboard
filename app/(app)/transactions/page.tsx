@@ -7,6 +7,7 @@ import { DataTable, type Column } from "@/components/common/DataTable";
 import { Pagination } from "@/components/common/Pagination";
 import { StatusBadge } from "@/components/ui/status_badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -31,11 +32,12 @@ const KIND_LABELS: Record<TransactionKind, string> = {
 export default function TransactionsPage() {
   const [page, setPage] = React.useState(1);
   const [kind, setKind] = React.useState<"" | TransactionKind>("");
+  const [org, setOrg] = React.useState("");
   const [reversingTxn, setReversingTxn] = React.useState<TransactionRow | null>(null);
 
   const { data, loading, error, refetch } = useAdminResource<Paginated<TransactionRow>>(
     "/admin/transactions/",
-    { page, kind: kind || undefined },
+    { page, kind: kind || undefined, org: org || undefined },
   );
 
   const columns: Column<TransactionRow>[] = [
@@ -75,13 +77,14 @@ export default function TransactionsPage() {
       key: "actions",
       header: "",
       className: "text-right",
-      render: (t) => (
-        <div className="flex justify-end">
-          <Button variant="outline" size="sm" onClick={() => setReversingTxn(t)}>
-            Reverse
-          </Button>
-        </div>
-      ),
+      render: (t) =>
+        t.changes_mtaji ? (
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" onClick={() => setReversingTxn(t)}>
+              Reverse
+            </Button>
+          </div>
+        ) : null,
     },
   ];
 
@@ -109,6 +112,15 @@ export default function TransactionsPage() {
             <SelectItem value="adjustment">Adjustment</SelectItem>
           </SelectContent>
         </Select>
+        <Input
+          value={org}
+          onChange={(e) => {
+            setOrg(e.target.value);
+            setPage(1);
+          }}
+          placeholder="MFI ID (organization UUID)"
+          className="w-64"
+        />
       </div>
 
       {error ? (

@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { ErrorState } from "@/components/common/PageStates";
 import { StatTile, StatTileSkeleton } from "@/components/overview/StatTile";
 import { AlertsPanel } from "@/components/overview/AlertsPanel";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, formatNumber } from "@/lib/format";
 import type { OverviewStats } from "@/types/admin";
 
 export default function Home() {
@@ -28,18 +28,18 @@ export default function Home() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile
               label="Organizations"
-              value={data.organizations.total}
-              sub={`${data.organizations.active} active · ${data.organizations.suspended} suspended`}
+              value={formatNumber(data.organizations.total)}
+              sub={`${formatNumber(data.organizations.active)} active · ${formatNumber(data.organizations.suspended)} suspended`}
             />
             <StatTile
               label="Borrowers"
-              value={data.borrowers.total}
-              sub={`${data.borrowers.with_debt} with debt · ${data.borrowers.overdue} overdue`}
+              value={formatNumber(data.borrowers.total)}
+              sub={`${formatNumber(data.borrowers.with_debt)} with debt · ${formatNumber(data.borrowers.overdue)} overdue`}
             />
             <StatTile
               label="Active loans"
-              value={data.loans.active}
-              sub={`of ${data.loans.total} total`}
+              value={formatNumber(data.loans.active)}
+              sub={`of ${formatNumber(data.loans.total)} total`}
             />
             <StatTile label="Outstanding portfolio" value={formatMoney(data.loans.outstanding)} />
             <StatTile label="Disbursed (all-time)" value={formatMoney(data.loans.disbursed)} />
@@ -47,17 +47,17 @@ export default function Home() {
             <StatTile
               label="Today's collections"
               value={formatMoney(data.today.collections)}
-              sub={`${data.today.collections_count} payments`}
+              sub={`${formatNumber(data.today.collections_count)} payments`}
             />
             <StatTile
               label="Today's disbursements"
               value={formatMoney(data.today.disbursements)}
-              sub={`${data.today.disbursements_count} loans`}
+              sub={`${formatNumber(data.today.disbursements_count)} loans`}
             />
             <StatTile
               label="Overdue"
               value={formatMoney(data.overdue.amount)}
-              sub={`${data.overdue.loans} loans`}
+              sub={`${formatNumber(data.overdue.loans)} loans`}
             />
             <StatTile
               label="Revenue (this month)"
@@ -66,13 +66,13 @@ export default function Home() {
             />
             <StatTile
               label="Subscriptions"
-              value={data.subscriptions.active}
-              sub={`${data.subscriptions.expiring_soon} expiring soon · ${data.subscriptions.expired} expired`}
+              value={formatNumber(data.subscriptions.active)}
+              sub={`${formatNumber(data.subscriptions.expiring_soon)} expiring soon · ${formatNumber(data.subscriptions.expired)} expired`}
             />
             <StatTile
               label="Failed payments"
-              value={data.revenue.failed_payments}
-              sub={`${data.revenue.pending_payments} pending`}
+              value={formatNumber(data.revenue.failed_payments)}
+              sub={`${formatNumber(data.revenue.pending_payments)} pending`}
             />
           </div>
 

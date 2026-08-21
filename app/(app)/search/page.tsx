@@ -84,7 +84,8 @@ function SearchPageInner() {
 
   const { data, loading, error, refetch } = useAdminResource<SearchResponse>(
     "/admin/search/",
-    enabled ? { q } : undefined,
+    { q },
+    { enabled },
   );
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
