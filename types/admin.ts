@@ -432,6 +432,60 @@ export interface SupportIssueDetail extends SupportIssue {
   notes: IssueNote[];
 }
 
+// ---- System ----------------------------------------------------
+
+export interface ActivityRow {
+  id: number | string;
+  method: string;
+  path: string;
+  feature: string;
+  status_code: number;
+  duration_ms: number;
+  user: string;
+  org: string;
+  created_at: string;
+}
+
+export interface SystemHealth {
+  counts: {
+    organizations: number;
+    organizations_suspended: number;
+    users: number;
+    borrowers: number;
+    loans: number;
+    repayments: number;
+    transactions: number;
+    open_issues: number;
+    failed_payments: number;
+    audit_events: number;
+  };
+  recent_activity: ActivityRow[];
+  recent_errors: ActivityRow[];
+  flags: {
+    email_verification_enabled: boolean;
+  };
+}
+
+// ---- Audit ----------------------------------------------------
+
+export interface AuditEntry {
+  id: string;
+  actor: string | null;
+  actor_phone: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  organization: string | null;
+  organization_name: string | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  reason: string;
+  ip: string;
+  result: string;
+  error: string;
+  created_at: string;
+}
+
 export interface OverviewStats {
   generated_at: string;
   organizations: {
