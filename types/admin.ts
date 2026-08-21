@@ -490,6 +490,54 @@ export interface AuditEntry {
   created_at: string;
 }
 
+export interface AdoptionSummary {
+  total_orgs: number;
+  suspended: number;
+  new_this_week: number;
+  new_this_month: number;
+  active_7d: number;
+  active_30d: number;
+  activity_events_7d: number;
+  paying: number;
+  trial: number;
+  expired: number;
+  total_users: number;
+}
+
+export interface SignupMonth {
+  month: string;
+  label: string;
+  count: number;
+}
+
+export interface RecentSignup {
+  id: string;
+  name: string;
+  created_at: string;
+  status: OrgStatus;
+  subscription_status: string | null;
+  users: number;
+  borrowers: number;
+  loans: number;
+  last_activity_at: string | null;
+}
+
+export interface TopActiveOrg {
+  id: string;
+  name: string;
+  events_7d: number;
+  last_activity_at: string | null;
+  subscription_status: string | null;
+}
+
+export interface AdoptionStats {
+  generated_at: string;
+  summary: AdoptionSummary;
+  signups_by_month: SignupMonth[];
+  recent_signups: RecentSignup[];
+  top_active_orgs: TopActiveOrg[];
+}
+
 export interface OverviewStats {
   generated_at: string;
   organizations: {
