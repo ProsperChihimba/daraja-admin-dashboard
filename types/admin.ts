@@ -296,6 +296,51 @@ export interface LoanDetail {
   [key: string]: unknown;
 }
 
+// ---- Transactions ----------------------------------------------------
+
+export type TransactionKind = "mkopo" | "rejesho" | "matumizi" | "mtaji" | "adjustment";
+
+export interface TransactionRow {
+  id: string;
+  name: string;
+  type: string;
+  date: string;
+  time: string;
+  amount: string;
+  mtaji_before: string;
+  mtaji_after: string;
+  payment: string;
+  payment_method: string;
+  changes_mtaji: boolean;
+  kind: string;
+  direction: string;
+  account_kind: string;
+  reference_type: string;
+  reference_id: string;
+  note: string;
+  created_at: string;
+  org: string;
+  org_id: string;
+}
+
+// ---- Search ----------------------------------------------------
+
+export type SearchResultType = "organization" | "borrower" | "loan" | "repayment" | "payment";
+
+export interface SearchResult {
+  type: SearchResultType;
+  id: string;
+  title: string;
+  subtitle: string;
+  org: string;
+  loan_id?: string;
+}
+
+export interface SearchResponse {
+  query: string;
+  results: SearchResult[];
+}
+
 export interface OverviewStats {
   generated_at: string;
   organizations: {
