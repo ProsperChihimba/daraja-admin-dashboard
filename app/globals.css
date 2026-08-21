@@ -1,0 +1,209 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ─────────────────────────────────────────────────────────────────
+   Daraja brand tokens. Hex values sampled directly from Figma PNGs.
+   Body bg is white; cream is the inner page-card wrapper.
+   ───────────────────────────────────────────────────────────────── */
+:root {
+  /* Surfaces */
+  --bg:           #FFFFFF;
+  --page-cream:   #F5F1EB;
+  --surface:      #FFFFFF;
+  --surface-2:    #FBF7F0;
+  --border-soft:  #E8E1D4;
+  --divider:      #EDE6D7;
+
+  /* Brand */
+  --brand-primary:        #33993C;
+  --brand-primary-hover:  #2A7F31;
+  --brand-primary-soft:   #E6F1E8;
+
+  /* Login hero gradient */
+  --hero-from:    #12781B;
+  --hero-via:     #0E7417;
+  --hero-to:      #003F06;
+
+  /* Text */
+  --text:         #1A1A1A;
+  --text-muted:   #6B6B6B;
+  --text-faint:   #9F9F9F;
+
+  /* Status */
+  --success-bg:   #22A45D;
+  --success-fg:   #FFFFFF;
+  --warning-bg:   #F4C430;
+  --warning-fg:   #1A1A1A;
+  --danger-bg:    #F4A6A0;
+  --danger-fg:    #7A1F1F;
+
+  /* Risk */
+  --risk-low:     #22A45D;
+  --risk-medium:  #F4C430;
+  --risk-high:    #D9534F;
+
+  /* Radii — pills, cards, inputs */
+  --radius-pill:   9999px;
+  --radius-card:   16px;
+  --radius-input:  12px;
+
+  /* Shadows */
+  --shadow-card:  0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --shadow-pop:   0 8px 24px rgba(0, 0, 0, 0.08);
+
+  /* ── shadcn token overrides (so all generated components inherit Daraja palette) ── */
+  --background:           #FFFFFF;
+  --foreground:           #1A1A1A;
+  --card:                 #FFFFFF;
+  --card-foreground:      #1A1A1A;
+  --popover:              #FFFFFF;
+  --popover-foreground:   #1A1A1A;
+  --primary:              #33993C;
+  --primary-foreground:   #FFFFFF;
+  --secondary:            #F5F1EB;
+  --secondary-foreground: #1A1A1A;
+  --muted:                #F5F1EB;
+  --muted-foreground:     #6B6B6B;
+  --accent:               #E6F1E8;
+  --accent-foreground:    #1A6428;
+  --destructive:          #D9534F;
+  --border:               #E8E1D4;
+  --input:                #E8E1D4;
+  --ring:                 #33993C;
+  --chart-1:              #33993C;
+  --chart-2:              #F4C430;
+  --chart-3:              #D9534F;
+  --chart-4:              #6B6B6B;
+  --chart-5:              #003F06;
+  --radius:               0.75rem;
+  --sidebar:                       #FFFFFF;
+  --sidebar-foreground:            #1A1A1A;
+  --sidebar-primary:               #33993C;
+  --sidebar-primary-foreground:    #FFFFFF;
+  --sidebar-accent:                #E6F1E8;
+  --sidebar-accent-foreground:     #1A6428;
+  --sidebar-border:                #E8E1D4;
+  --sidebar-ring:                  #33993C;
+}
+
+/* Expose Daraja tokens as Tailwind utilities (bg-bg, bg-page-cream, text-primary, rounded-pill, shadow-card, etc.) */
+@theme inline {
+  /* Fonts — Comic Sans MS is a system font on macOS / Windows; no webfont loading required. */
+  --font-sans: "Comic Sans MS", "Comic Sans", "Chalkboard SE", cursive, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-heading: "Comic Sans MS", "Comic Sans", "Chalkboard SE", cursive, system-ui, sans-serif;
+
+  /* Daraja surfaces */
+  --color-bg:          var(--bg);
+  --color-page-cream:  var(--page-cream);
+  --color-surface:     var(--surface);
+  --color-surface-2:   var(--surface-2);
+  --color-border-soft: var(--border-soft);
+  --color-divider:     var(--divider);
+
+  /* Daraja brand */
+  --color-brand:         var(--brand-primary);
+  --color-brand-hover:   var(--brand-primary-hover);
+  --color-brand-soft:    var(--brand-primary-soft);
+  --color-primary-soft:  var(--brand-primary-soft);
+
+  /* Login hero */
+  --color-hero-from: var(--hero-from);
+  --color-hero-via:  var(--hero-via);
+  --color-hero-to:   var(--hero-to);
+
+  /* Text */
+  --color-text:        var(--text);
+  --color-text-muted:  var(--text-muted);
+  --color-text-faint:  var(--text-faint);
+
+  /* Status */
+  --color-success-bg:  var(--success-bg);
+  --color-success-fg:  var(--success-fg);
+  --color-warning-bg:  var(--warning-bg);
+  --color-warning-fg:  var(--warning-fg);
+  --color-danger-bg:   var(--danger-bg);
+  --color-danger-fg:   var(--danger-fg);
+
+  /* Risk */
+  --color-risk-low:    var(--risk-low);
+  --color-risk-medium: var(--risk-medium);
+  --color-risk-high:   var(--risk-high);
+
+  /* Daraja radii */
+  --radius-pill:  var(--radius-pill);
+  --radius-card:  var(--radius-card);
+  --radius-input: var(--radius-input);
+
+  /* Daraja shadows */
+  --shadow-card: var(--shadow-card);
+  --shadow-pop:  var(--shadow-pop);
+
+  /* ── shadcn aliases (preserved for component compatibility) ── */
+  --color-background:               var(--background);
+  --color-foreground:                var(--foreground);
+  --color-card:                      var(--card);
+  --color-card-foreground:           var(--card-foreground);
+  --color-popover:                   var(--popover);
+  --color-popover-foreground:        var(--popover-foreground);
+  --color-primary:                   var(--primary);
+  --color-primary-foreground:        var(--primary-foreground);
+  --color-secondary:                 var(--secondary);
+  --color-secondary-foreground:      var(--secondary-foreground);
+  --color-muted:                     var(--muted);
+  --color-muted-foreground:          var(--muted-foreground);
+  --color-accent:                    var(--accent);
+  --color-accent-foreground:         var(--accent-foreground);
+  --color-destructive:               var(--destructive);
+  --color-border:                    var(--border);
+  --color-input:                     var(--input);
+  --color-ring:                      var(--ring);
+  --color-chart-1:                   var(--chart-1);
+  --color-chart-2:                   var(--chart-2);
+  --color-chart-3:                   var(--chart-3);
+  --color-chart-4:                   var(--chart-4);
+  --color-chart-5:                   var(--chart-5);
+  --color-sidebar:                   var(--sidebar);
+  --color-sidebar-foreground:        var(--sidebar-foreground);
+  --color-sidebar-primary:           var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent:            var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border:            var(--sidebar-border);
+  --color-sidebar-ring:              var(--sidebar-ring);
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: var(--radius);
+  --radius-xl: 18px;
+  --radius-2xl: 22px;
+  --radius-3xl: 28px;
+  --radius-4xl: 36px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/40;
+  }
+  body {
+    @apply bg-bg text-text;
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv01";
+  }
+  html {
+    @apply font-sans;
+  }
+  /* Numbers and tabular figures align nicely in the table */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Scoped utility helpers used across the app */
+@utility bg-page-card {
+  background-color: var(--page-cream);
+  border-radius: var(--radius-card);
+}
