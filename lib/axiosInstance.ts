@@ -32,8 +32,10 @@ let refreshing: Promise<string> | null = null;
 async function refreshAccess(): Promise<string> {
   const refresh = localStorage.getItem(REFRESH);
   if (!refresh) throw new Error("no refresh token");
-  const { data } = await axios.post(`${BASE}/auth/token/refresh/`, { refresh });
+  // Backend mounts SimpleJWT's TokenRefreshView at /api/v1/auth/refresh/.
+  const { data } = await axios.post(`${BASE}/auth/refresh/`, { refresh });
   localStorage.setItem(ACCESS, data.access);
+  if (data.refresh) localStorage.setItem(REFRESH, data.refresh); // if rotation is on
   return data.access;
 }
 

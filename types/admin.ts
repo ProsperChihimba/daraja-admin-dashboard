@@ -2,7 +2,11 @@ export type OrgStatus = "active" | "suspended";
 
 export interface AdminUser {
   id: string;
+  /** Derived client-side from first_name + last_name (backend has no `name` field). */
   name: string;
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
   email: string;
   is_superuser: boolean;
 }
