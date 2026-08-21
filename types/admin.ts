@@ -341,6 +341,56 @@ export interface SearchResponse {
   results: SearchResult[];
 }
 
+// ---- Billing ----------------------------------------------------
+
+export interface Package {
+  id: string;
+  name: string;
+  description: string;
+  price: string;
+  duration_days: number;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DiscountCode {
+  id: string;
+  code: string;
+  description: string;
+  percent_off: string | null;
+  amount_off: string | null;
+  is_active: boolean;
+  valid_until: string | null;
+  max_uses: number | null;
+  used_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PaymentStatus = "pending" | "paid" | "failed";
+
+export interface PaymentRow {
+  id: string;
+  order_id: string;
+  status: PaymentStatus;
+  amount: string;
+  method: string;
+  package: string;
+  package_name: string;
+  phone_number: string;
+  discount_amount: string;
+  swahilies_reference: string;
+  note: string;
+  paid_at: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  created_at: string;
+  org: string;
+  org_id: string;
+}
+
 export interface OverviewStats {
   generated_at: string;
   organizations: {
