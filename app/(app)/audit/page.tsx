@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status_badge";
+import { DateRangeFilter, EMPTY_RANGE, type DateRange } from "@/components/common/DateRangeFilter";
 import { AuditDetailModal, resultVariant } from "@/components/audit/AuditDetailModal";
 import { formatDateTime } from "@/lib/format";
 import type { AuditEntry, Paginated } from "@/types/admin";
@@ -56,6 +57,7 @@ export default function AuditPage() {
   const [entityType, setEntityType] = React.useState("");
   const [result, setResult] = React.useState("");
   const [selected, setSelected] = React.useState<AuditEntry | null>(null);
+  const [dates, setDates] = React.useState<DateRange>(EMPTY_RANGE);
 
   const { data, loading, error, refetch } = useAdminResource<Paginated<AuditEntry>>(
     "/admin/audit/",
@@ -64,6 +66,8 @@ export default function AuditPage() {
       action: action || undefined,
       entity_type: entityType || undefined,
       result: result || undefined,
+      created_after: dates.after || undefined,
+      created_before: dates.before || undefined,
     },
   );
 
@@ -154,6 +158,13 @@ export default function AuditPage() {
             ))}
           </SelectContent>
         </Select>
+        <DateRangeFilter
+          value={dates}
+          onChange={(v) => {
+            setDates(v);
+            setPage(1);
+          }}
+        />
       </div>
 
       {error ? (

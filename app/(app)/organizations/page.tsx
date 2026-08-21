@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status_badge";
+import { DateRangeFilter, EMPTY_RANGE, type DateRange } from "@/components/common/DateRangeFilter";
 import { formatMoney, formatNumber, formatDate } from "@/lib/format";
 import type { OrganizationRow, Paginated } from "@/types/admin";
 
@@ -26,6 +27,7 @@ export default function OrganizationsPage() {
   const [qInput, setQInput] = React.useState("");
   const [q, setQ] = React.useState("");
   const [status, setStatus] = React.useState<"" | "active" | "suspended">("");
+  const [dates, setDates] = React.useState<DateRange>(EMPTY_RANGE);
 
   React.useEffect(() => {
     const t = setTimeout(() => {
@@ -37,7 +39,13 @@ export default function OrganizationsPage() {
 
   const { data, loading, error, refetch } = useAdminResource<Paginated<OrganizationRow>>(
     "/admin/organizations/",
-    { page, q: q || undefined, status: status || undefined },
+    {
+      page,
+      q: q || undefined,
+      status: status || undefined,
+      created_after: dates.after || undefined,
+      created_before: dates.before || undefined,
+    },
   );
 
   const columns: Column<OrganizationRow>[] = [
@@ -121,6 +129,13 @@ export default function OrganizationsPage() {
             <SelectItem value="suspended">Suspended</SelectItem>
           </SelectContent>
         </Select>
+        <DateRangeFilter
+          value={dates}
+          onChange={(v) => {
+            setDates(v);
+            setPage(1);
+          }}
+        />
       </div>
 
       {error ? (

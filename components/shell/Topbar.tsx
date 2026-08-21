@@ -26,7 +26,7 @@ export default function Topbar() {
   }
 
   return (
-    <header className="flex h-14 items-center gap-4 border-b border-border-soft bg-surface px-4">
+    <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b border-border-soft bg-surface px-4">
       <form onSubmit={handleSearch} className="w-full max-w-md">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-faint" />

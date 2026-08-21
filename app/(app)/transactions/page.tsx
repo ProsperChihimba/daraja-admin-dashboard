@@ -6,6 +6,7 @@ import { ErrorState } from "@/components/common/PageStates";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { Pagination } from "@/components/common/Pagination";
 import { StatusBadge } from "@/components/ui/status_badge";
+import { DateRangeFilter, EMPTY_RANGE, type DateRange } from "@/components/common/DateRangeFilter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -34,10 +35,17 @@ export default function TransactionsPage() {
   const [kind, setKind] = React.useState<"" | TransactionKind>("");
   const [org, setOrg] = React.useState("");
   const [reversingTxn, setReversingTxn] = React.useState<TransactionRow | null>(null);
+  const [dates, setDates] = React.useState<DateRange>(EMPTY_RANGE);
 
   const { data, loading, error, refetch } = useAdminResource<Paginated<TransactionRow>>(
     "/admin/transactions/",
-    { page, kind: kind || undefined, org: org || undefined },
+    {
+      page,
+      kind: kind || undefined,
+      org: org || undefined,
+      created_after: dates.after || undefined,
+      created_before: dates.before || undefined,
+    },
   );
 
   const columns: Column<TransactionRow>[] = [
@@ -120,6 +128,13 @@ export default function TransactionsPage() {
           }}
           placeholder="MFI ID (organization UUID)"
           className="w-64"
+        />
+        <DateRangeFilter
+          value={dates}
+          onChange={(v) => {
+            setDates(v);
+            setPage(1);
+          }}
         />
       </div>
 

@@ -7,6 +7,7 @@ import { ErrorState } from "@/components/common/PageStates";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { Pagination } from "@/components/common/Pagination";
 import { StatusBadgeFor } from "@/components/common/StatusBadgeFor";
+import { DateRangeFilter, EMPTY_RANGE, type DateRange } from "@/components/common/DateRangeFilter";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/format";
 import type { BorrowerRow, Paginated } from "@/types/admin";
@@ -18,6 +19,7 @@ export default function BorrowersPage() {
   const [page, setPage] = React.useState(1);
   const [qInput, setQInput] = React.useState("");
   const [q, setQ] = React.useState("");
+  const [dates, setDates] = React.useState<DateRange>(EMPTY_RANGE);
 
   React.useEffect(() => {
     const t = setTimeout(() => {
@@ -29,7 +31,12 @@ export default function BorrowersPage() {
 
   const { data, loading, error, refetch } = useAdminResource<Paginated<BorrowerRow>>(
     "/admin/borrowers/",
-    { page, q: q || undefined },
+    {
+      page,
+      q: q || undefined,
+      created_after: dates.after || undefined,
+      created_before: dates.before || undefined,
+    },
   );
 
   const columns: Column<BorrowerRow>[] = [
@@ -67,6 +74,13 @@ export default function BorrowersPage() {
           value={qInput}
           onChange={(e) => setQInput(e.target.value)}
           className="max-w-xs"
+        />
+        <DateRangeFilter
+          value={dates}
+          onChange={(v) => {
+            setDates(v);
+            setPage(1);
+          }}
         />
       </div>
 

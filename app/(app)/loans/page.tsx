@@ -7,6 +7,7 @@ import { ErrorState } from "@/components/common/PageStates";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { Pagination } from "@/components/common/Pagination";
 import { StatusBadgeFor } from "@/components/common/StatusBadgeFor";
+import { DateRangeFilter, EMPTY_RANGE, type DateRange } from "@/components/common/DateRangeFilter";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -26,6 +27,7 @@ export default function LoansPage() {
   const [qInput, setQInput] = React.useState("");
   const [q, setQ] = React.useState("");
   const [status, setStatus] = React.useState<"" | LoanStatus>("");
+  const [dates, setDates] = React.useState<DateRange>(EMPTY_RANGE);
 
   React.useEffect(() => {
     const t = setTimeout(() => {
@@ -37,7 +39,13 @@ export default function LoansPage() {
 
   const { data, loading, error, refetch } = useAdminResource<Paginated<LoanRow>>(
     "/admin/loans/",
-    { page, q: q || undefined, status: status || undefined },
+    {
+      page,
+      q: q || undefined,
+      status: status || undefined,
+      created_after: dates.after || undefined,
+      created_before: dates.before || undefined,
+    },
   );
 
   const columns: Column<LoanRow>[] = [
@@ -82,6 +90,13 @@ export default function LoansPage() {
             <SelectItem value="overdue">Overdue</SelectItem>
           </SelectContent>
         </Select>
+        <DateRangeFilter
+          value={dates}
+          onChange={(v) => {
+            setDates(v);
+            setPage(1);
+          }}
+        />
       </div>
 
       {error ? (

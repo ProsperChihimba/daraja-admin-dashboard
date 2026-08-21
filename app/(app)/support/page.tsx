@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { IssueStatusBadge, IssuePriorityBadge } from "@/components/support/badges";
+import { DateRangeFilter, EMPTY_RANGE, type DateRange } from "@/components/common/DateRangeFilter";
 import { CreateIssueDialog } from "@/components/support/CreateIssueDialog";
 import { formatDate } from "@/lib/format";
 import type { IssueCategory, IssuePriority, IssueStatus, Paginated, SupportIssue } from "@/types/admin";
@@ -42,6 +43,7 @@ export default function SupportPage() {
   const [status, setStatus] = React.useState<"" | IssueStatus>("");
   const [priority, setPriority] = React.useState<"" | IssuePriority>("");
   const [openOnly, setOpenOnly] = React.useState(false);
+  const [dates, setDates] = React.useState<DateRange>(EMPTY_RANGE);
   const [createOpen, setCreateOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -60,6 +62,8 @@ export default function SupportPage() {
       status: status || undefined,
       priority: priority || undefined,
       open: openOnly ? "1" : undefined,
+      created_after: dates.after || undefined,
+      created_before: dates.before || undefined,
     },
   );
 
@@ -141,6 +145,13 @@ export default function SupportPage() {
           />
           Open only
         </Label>
+        <DateRangeFilter
+          value={dates}
+          onChange={(v) => {
+            setDates(v);
+            setPage(1);
+          }}
+        />
       </div>
 
       {error ? (

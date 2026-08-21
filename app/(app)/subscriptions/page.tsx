@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { PackageDialog } from "@/components/billing/PackageDialog";
 import { DiscountDialog } from "@/components/billing/DiscountDialog";
+import { DateRangeFilter, EMPTY_RANGE, type DateRange } from "@/components/common/DateRangeFilter";
 import { formatMoney, formatNumber, formatDate, formatDateTime } from "@/lib/format";
 import type {
   Package,
@@ -69,6 +70,7 @@ export default function SubscriptionsPage() {
   // ---- Payments ----
   const [paymentsPage, setPaymentsPage] = React.useState(1);
   const [paymentsStatus, setPaymentsStatus] = React.useState<"" | PaymentStatus>("");
+  const [paymentDates, setPaymentDates] = React.useState<DateRange>(EMPTY_RANGE);
   const {
     data: paymentsData,
     loading: paymentsLoading,
@@ -77,6 +79,8 @@ export default function SubscriptionsPage() {
   } = useAdminResource<Paginated<PaymentRow>>("/admin/payments/", {
     page: paymentsPage,
     status: paymentsStatus || undefined,
+    created_after: paymentDates.after || undefined,
+    created_before: paymentDates.before || undefined,
   });
 
   const packageColumns: Column<Package>[] = [
@@ -298,23 +302,32 @@ export default function SubscriptionsPage() {
           <CardHeader>
             <CardTitle>Payments</CardTitle>
             <CardAction>
-              <Select
-                value={paymentsStatus || "all"}
-                onValueChange={(v) => {
-                  setPaymentsStatus(v === "all" ? "" : (v as PaymentStatus));
-                  setPaymentsPage(1);
-                }}
-              >
-                <SelectTrigger className="w-36">
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="paid">Paid</SelectItem>
-                  <SelectItem value="failed">Failed</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex flex-wrap items-center gap-3">
+                <DateRangeFilter
+                  value={paymentDates}
+                  onChange={(v) => {
+                    setPaymentDates(v);
+                    setPaymentsPage(1);
+                  }}
+                />
+                <Select
+                  value={paymentsStatus || "all"}
+                  onValueChange={(v) => {
+                    setPaymentsStatus(v === "all" ? "" : (v as PaymentStatus));
+                    setPaymentsPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </CardAction>
           </CardHeader>
           <CardContent>

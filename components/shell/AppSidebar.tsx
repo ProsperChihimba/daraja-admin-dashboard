@@ -14,7 +14,7 @@ export default function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+    <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
       <div className="px-5 py-6">
         <div className="font-heading text-xl font-bold text-text">Ankara</div>
         <div className="text-xs text-text-muted">Control Center</div>
