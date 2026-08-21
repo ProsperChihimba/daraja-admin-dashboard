@@ -391,6 +391,47 @@ export interface PaymentRow {
   org_id: string;
 }
 
+// ---- Support ----------------------------------------------------
+
+export type IssueCategory = "loan" | "payment" | "account" | "data" | "technical" | "other";
+export type IssuePriority = "low" | "medium" | "high" | "urgent";
+export type IssueStatus = "open" | "investigating" | "waiting" | "resolved" | "closed";
+
+export interface SupportIssue {
+  id: string;
+  reference: string;
+  title: string;
+  category: IssueCategory;
+  priority: IssuePriority;
+  status: IssueStatus;
+  organization: string | null;
+  organization_name: string | null;
+  subject_type: string | null;
+  subject_id: string | null;
+  reporter_name: string | null;
+  reporter_phone: string | null;
+  assignee: string | null;
+  assignee_name: string | null;
+  notes_count: number;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+}
+
+export interface IssueNote {
+  id: string;
+  author: string;
+  author_phone: string | null;
+  body: string;
+  created_at: string;
+}
+
+export interface SupportIssueDetail extends SupportIssue {
+  description: string;
+  resolution: string;
+  notes: IssueNote[];
+}
+
 export interface OverviewStats {
   generated_at: string;
   organizations: {

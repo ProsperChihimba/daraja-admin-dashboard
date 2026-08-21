@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status_badge";
 import { StatTile } from "@/components/overview/StatTile";
 import { SuspendActivateDialog } from "@/components/org/SuspendActivateDialog";
+import { RecordPaymentDialog } from "@/components/org/RecordPaymentDialog";
 import { formatMoney, formatNumber, formatDate, formatDateTime } from "@/lib/format";
 import type {
   OrganizationDetail,
@@ -24,6 +25,7 @@ export default function OrganizationDetailPage() {
     `/admin/organizations/${id}/`,
   );
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = React.useState(false);
 
   const staffColumns: Column<OrganizationStaffMember>[] = [
     { key: "full_name", header: "Name", render: (s) => s.full_name ?? "—" },
@@ -82,12 +84,17 @@ export default function OrganizationDetailPage() {
         title={org.name}
         subtitle={subtitle}
         actions={
-          <Button
-            variant={isActive ? "destructive" : "outline"}
-            onClick={() => setDialogOpen(true)}
-          >
-            {isActive ? "Suspend" : "Activate"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setPaymentDialogOpen(true)}>
+              Record payment
+            </Button>
+            <Button
+              variant={isActive ? "destructive" : "outline"}
+              onClick={() => setDialogOpen(true)}
+            >
+              {isActive ? "Suspend" : "Activate"}
+            </Button>
+          </div>
         }
       />
 
@@ -207,6 +214,16 @@ export default function OrganizationDetailPage() {
         onOpenChange={setDialogOpen}
         onDone={() => {
           setDialogOpen(false);
+          void refetch();
+        }}
+      />
+
+      <RecordPaymentDialog
+        open={paymentDialogOpen}
+        onOpenChange={setPaymentDialogOpen}
+        organizationId={org.id}
+        onDone={() => {
+          setPaymentDialogOpen(false);
           void refetch();
         }}
       />
