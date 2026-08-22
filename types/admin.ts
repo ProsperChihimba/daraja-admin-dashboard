@@ -88,6 +88,26 @@ export interface OrganizationStats {
   loans_active: number;
   outstanding: string;
   staff: number;
+  last_login: string | null;
+  last_activity: string | null;
+}
+
+/** Row for the org-scoped Repayments tab (RepaymentSerializer + org label). */
+export interface RepaymentRow {
+  id: string;
+  repayment_id: string;
+  loan_id: string;
+  loan_loan_id: string;
+  borrower_name?: string;
+  scheduled_date: string | null;
+  paid_date: string | null;
+  amount: string;
+  amount_paid: string;
+  status: string;
+  transaction_reference?: string;
+  org: string;
+  org_id: string;
+  [key: string]: unknown;
 }
 
 export interface OrganizationRow extends OrganizationAdmin {

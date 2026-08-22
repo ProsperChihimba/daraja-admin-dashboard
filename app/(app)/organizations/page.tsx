@@ -14,10 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { StatusBadge } from "@/components/ui/status_badge";
+import { StatusBadge, type StatusVariant } from "@/components/ui/status_badge";
 import { DateRangeFilter, EMPTY_RANGE, type DateRange } from "@/components/common/DateRangeFilter";
-import { formatMoney, formatNumber, formatDate } from "@/lib/format";
-import type { OrganizationRow, Paginated } from "@/types/admin";
+import { StatTile, StatTileSkeleton } from "@/components/overview/StatTile";
+import { formatNumber, formatDate, formatRelative } from "@/lib/format";
+import type { AdoptionStats, OrganizationRow, Paginated } from "@/types/admin";
 
 const PAGE_SIZE = 100;
 
@@ -48,63 +49,98 @@ export default function OrganizationsPage() {
     },
   );
 
+  const { data: adoption, loading: adoptionLoading, error: adoptionError } = useAdminResource<AdoptionStats>(
+    "/admin/overview/adoption/",
+  );
+
+  const subscriptionVariant = (s: string | undefined | null): StatusVariant => {
+    if (s === "active") return "success";
+    if (s === "trial") return "warning";
+    if (!s) return "neutral";
+    return "danger";
+  };
+
   const columns: Column<OrganizationRow>[] = [
+    {
+      key: "created_at",
+      header: "Reg Date",
+      render: (o) => formatDate(o.created_at),
+    },
     {
       key: "name",
       header: "Name",
-      render: (o) => (
-        <div>
-          <div className="font-medium text-text">{o.name}</div>
-          {o.region || o.district ? (
-            <div className="text-xs text-text-muted">
-              {[o.region, o.district].filter(Boolean).join(" · ")}
-            </div>
-          ) : null}
-        </div>
-      ),
+      render: (o) => <span className="font-medium text-text">{o.name}</span>,
     },
     {
-      key: "status",
-      header: "Status",
+      key: "address",
+      header: "Address",
+      render: (o) => [o.region, o.district].filter(Boolean).join(", ") || "—",
+    },
+    {
+      key: "last_login",
+      header: "Last Login",
+      render: (o) => formatRelative(o.stats.last_login),
+    },
+    {
+      key: "last_activity",
+      header: "Last Activity",
+      render: (o) => formatRelative(o.stats.last_activity),
+    },
+    {
+      key: "subscription_status",
+      header: "Subscription Status",
       render: (o) => (
-        <StatusBadge variant={o.status === "active" ? "success" : "danger"}>
-          {o.status === "active" ? "Active" : "Suspended"}
+        <StatusBadge variant={subscriptionVariant(o.subscription?.status)}>
+          {o.subscription?.status
+            ? o.subscription.status.charAt(0).toUpperCase() + o.subscription.status.slice(1)
+            : "None"}
         </StatusBadge>
       ),
     },
     {
-      key: "borrowers",
-      header: "Borrowers",
-      render: (o) => formatNumber(o.stats.borrowers),
+      key: "package",
+      header: "Package",
+      render: (o) => o.subscription?.package?.name ?? "—",
     },
     {
-      key: "loans_active",
-      header: "Active loans",
-      render: (o) => `${formatNumber(o.stats.loans_active)} of ${formatNumber(o.stats.loans_total)}`,
-    },
-    {
-      key: "outstanding",
-      header: "Outstanding",
-      render: (o) => formatMoney(o.stats.outstanding),
-    },
-    {
-      key: "subscription",
-      header: "Subscription",
-      render: (o) =>
-        o.subscription?.package?.name
-          ? `${o.subscription.package.name}${o.subscription.status ? ` · ${o.subscription.status}` : ""}`
-          : "—",
-    },
-    {
-      key: "created_at",
-      header: "Created",
-      render: (o) => formatDate(o.created_at),
+      key: "expiry",
+      header: "Expiry",
+      render: (o) => formatDate(o.subscription?.current_period_end),
     },
   ];
 
   return (
     <>
       <PageHeader title="Organizations" subtitle="All MFIs on the platform" />
+
+      {adoptionError ? null : (
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          {adoptionLoading || !adoption ? (
+            Array.from({ length: 6 }).map((_, i) => <StatTileSkeleton key={i} />)
+          ) : (
+            <>
+              <StatTile
+                label="Total MFIs"
+                value={formatNumber(adoption.summary.total_orgs)}
+                sub={`${formatNumber(adoption.summary.suspended)} suspended`}
+              />
+              <StatTile
+                label="New this month"
+                value={formatNumber(adoption.summary.new_this_month)}
+                sub={`${formatNumber(adoption.summary.new_this_week)} this week`}
+              />
+              <StatTile
+                label="Active (7 days)"
+                value={formatNumber(adoption.summary.active_7d)}
+                sub={`${formatNumber(adoption.summary.active_30d)} in 30 days`}
+              />
+              <StatTile label="Paying" value={formatNumber(adoption.summary.paying)} />
+              <StatTile label="Trial" value={formatNumber(adoption.summary.trial)} />
+              <StatTile label="Expired" value={formatNumber(adoption.summary.expired)} />
+            </>
+          )}
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Input

@@ -1,9 +1,6 @@
 import {
   LayoutDashboard,
   Building2,
-  Users,
-  Banknote,
-  ArrowLeftRight,
   CreditCard,
   LifeBuoy,
   Activity,
@@ -23,6 +20,9 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+// Top-level nav is Ankara's *business*, not per-MFI operations. Loans,
+// borrowers, repayments, and transactions live inside an organization's
+// detail view, never as cross-MFI top-level screens.
 export const sidebarConfig: NavGroup[] = [
   {
     id: "overview",
@@ -30,23 +30,12 @@ export const sidebarConfig: NavGroup[] = [
     items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard }],
   },
   {
-    id: "tenants",
-    label: "Tenants",
-    items: [{ label: "Organizations", href: "/organizations", icon: Building2 }],
-  },
-  {
-    id: "investigate",
-    label: "Investigate",
+    id: "business",
+    label: "Business",
     items: [
-      { label: "Borrowers", href: "/borrowers", icon: Users },
-      { label: "Loans", href: "/loans", icon: Banknote },
-      { label: "Transactions", href: "/transactions", icon: ArrowLeftRight },
+      { label: "Organizations", href: "/organizations", icon: Building2 },
+      { label: "Subscriptions", href: "/subscriptions", icon: CreditCard },
     ],
-  },
-  {
-    id: "billing",
-    label: "Billing",
-    items: [{ label: "Subscriptions", href: "/subscriptions", icon: CreditCard }],
   },
   {
     id: "operations",

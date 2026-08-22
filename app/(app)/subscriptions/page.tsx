@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status_badge";
+import { TextEyebrow } from "@/components/ui/typography";
 import {
   Select,
   SelectContent,
@@ -237,67 +238,8 @@ export default function SubscriptionsPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Packages</CardTitle>
-            <CardAction>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setEditingPackage(null);
-                  setPackageDialogOpen(true);
-                }}
-              >
-                New package
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            {packagesError ? (
-              <ErrorState message={packagesError} onRetry={refetchPackages} />
-            ) : (
-              <DataTable<Package>
-                columns={packageColumns}
-                rows={packages ?? []}
-                loading={packagesLoading}
-                emptyMessage="No packages yet."
-                rowKey={(p) => p.id}
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Discount codes</CardTitle>
-            <CardAction>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setEditingDiscount(null);
-                  setDiscountDialogOpen(true);
-                }}
-              >
-                New code
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            {discountsError ? (
-              <ErrorState message={discountsError} onRetry={refetchDiscounts} />
-            ) : (
-              <DataTable<DiscountCode>
-                columns={discountColumns}
-                rows={discounts ?? []}
-                loading={discountsLoading}
-                emptyMessage="No discount codes yet."
-                rowKey={(d) => d.id}
-              />
-            )}
-          </CardContent>
-        </Card>
-
+      <div className="flex flex-col gap-8">
+        {/* Payments — primary content: subscription revenue & payment activity at a glance */}
         <Card>
           <CardHeader>
             <CardTitle>Payments</CardTitle>
@@ -354,6 +296,74 @@ export default function SubscriptionsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Packages & discounts — secondary, demoted configuration */}
+        <div className="flex flex-col gap-3">
+          <TextEyebrow>Configuration</TextEyebrow>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card size="sm">
+              <CardHeader>
+                <CardTitle>Packages</CardTitle>
+                <CardAction>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingPackage(null);
+                      setPackageDialogOpen(true);
+                    }}
+                  >
+                    New package
+                  </Button>
+                </CardAction>
+              </CardHeader>
+              <CardContent>
+                {packagesError ? (
+                  <ErrorState message={packagesError} onRetry={refetchPackages} />
+                ) : (
+                  <DataTable<Package>
+                    columns={packageColumns}
+                    rows={packages ?? []}
+                    loading={packagesLoading}
+                    emptyMessage="No packages yet."
+                    rowKey={(p) => p.id}
+                  />
+                )}
+              </CardContent>
+            </Card>
+
+            <Card size="sm">
+              <CardHeader>
+                <CardTitle>Discount codes</CardTitle>
+                <CardAction>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingDiscount(null);
+                      setDiscountDialogOpen(true);
+                    }}
+                  >
+                    New code
+                  </Button>
+                </CardAction>
+              </CardHeader>
+              <CardContent>
+                {discountsError ? (
+                  <ErrorState message={discountsError} onRetry={refetchDiscounts} />
+                ) : (
+                  <DataTable<DiscountCode>
+                    columns={discountColumns}
+                    rows={discounts ?? []}
+                    loading={discountsLoading}
+                    emptyMessage="No discount codes yet."
+                    rowKey={(d) => d.id}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
 
       <PackageDialog
