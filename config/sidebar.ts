@@ -5,7 +5,6 @@ import {
   LifeBuoy,
   Activity,
   ScrollText,
-  Wallet,
   Users,
   type LucideIcon,
 } from "lucide-react";
