@@ -5,6 +5,8 @@ import {
   LifeBuoy,
   Activity,
   ScrollText,
+  Wallet,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -45,5 +47,10 @@ export const sidebarConfig: NavGroup[] = [
       { label: "System", href: "/system", icon: Activity },
       { label: "Audit Log", href: "/audit", icon: ScrollText },
     ],
+  },
+  {
+    id: "daraja",
+    label: "Daraja Ops",
+    items: [{ label: "Merchants", href: "/daraja/merchants", icon: Users }],
   },
 ];
