@@ -47,9 +47,22 @@ export function useDarajaResource<T>(
       const res = await darajaApi.get<T>(path, { params });
       setData(res.data);
     } catch (e) {
+      // dashboard_exception_handler nests every raised DRF exception as
+      // {error: {message, code, fields}}. AdminLogin's 401, though, never
+      // passes through that wrapper -- it's a bare Response, so its body
+      // really is the flat {message}. Check the nested shape first, then
+      // the flat one, before falling back to axios's own generic text.
+      const body = (
+        e as {
+          response?: {
+            data?: { error?: { message?: string }; message?: string };
+          };
+        }
+      )?.response?.data;
       const message =
-        (e as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? (e instanceof Error ? e.message : "Failed to load");
+        body?.error?.message ??
+        body?.message ??
+        (e instanceof Error ? e.message : "Failed to load");
       setError(message);
     } finally {
       setLoading(false);
