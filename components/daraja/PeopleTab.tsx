@@ -31,11 +31,21 @@ export function PeopleTab({ employerId }: { employerId: string }) {
     if (page) setBranches(page.branches);
   }, [page]);
 
-  if (error) return <ErrorState message={error} onRetry={refetch} />;
+  // ONLY a failure with nothing to show takes the whole tab. This was a bare
+  // `if (error)`, which wiped every employee row already read -- and the
+  // branch table beside them -- when one later page failed. That is the same
+  // defect M2 fixed in CursorList; this file took M1's half of that commit
+  // and not M2's, which left the two paginated tabs behaving differently on
+  // an identical failure. The rows survive in state either way; what changes
+  // is that they stay on screen, with the error reported above them.
+  if (error && !employees.length) {
+    return <ErrorState message={error} onRetry={refetch} />;
+  }
   if (loading && !employees.length) return <LoadingBlock />;
 
   return (
     <div className="space-y-8">
+      {error ? <ErrorState message={error} onRetry={refetch} /> : null}
       <section>
         <h3 className="mb-2 font-heading text-sm font-semibold text-text">
           Employees
