@@ -30,43 +30,56 @@ const KIND_FILTERS = ["", "expense", "payout", "deposit", "card_load", "admin"] 
 
 const SKELETON_ROWS = 6;
 
+const rowKeyOf = (r: TimelineRow) => `${r.kind}:${r.link_type}:${r.link_id}`;
+
 /**
- * Pairs an adjacent expense/payout with a matching amount.
+ * Pairs a payout with the expense it actually settles, on the REAL relation.
  *
- * Neither `reference` nor `link_id` ties the pair together: a payout row's
- * `reference` is `ExpensePayout.payout_id`, its own primary key, never the
- * `expense_id` of the expense it pays out (confirmed against
- * `payments/services/expense_payout.py`, which never copies one id onto the
- * other -- `TimelineRow` has no field carrying that FK at all). `occurred_at`
- * ties are not reliable either: live data shows a payout's `created_at`
- * landing 1-1.5s after its expense's `expense_date` (two separate INSERTs
- * in the same request, not one), never bit-identical. What IS reliable,
- * confirmed against a real merchant's activity: `run_expense_payout` always
- * passes `amount = int(expense.amount)` (`payments/services/expense_payout.py`),
- * so the pair carries the same `amount`, and the backend's own sort
- * (`occurred_at` desc, `reference` desc) always places the payout row
- * immediately before its expense row. Adjacency + a matching amount is the
- * best signal this screen has without a real FK to join on.
+ * `related_expense_id` is `ExpensePayout.expense_id` -- the FK column of a
+ * OneToOneField, read straight off the payout row
+ * (dashboard/services/timeline.py). It is a CharField, never an int: it is
+ * compared with `===` against `link_id` and must not be coerced to a number.
+ * It is set on PAYOUT rows only and is null on every other kind, expense rows
+ * included.
+ *
+ * WHAT THIS REPLACED, AND WHY THERE IS NO FALLBACK. The previous version
+ * paired a row with the NEXT row when one was a payout, one an expense, and
+ * the amounts matched. Adjacency is not a relation: two 10,000 expenses where
+ * only the older was paid sort as [unpaid, payout, paid], so the UNPAID
+ * expense was labelled "linked" to the other expense's payout and the paid one
+ * rendered as unpaid -- the exact inversion of the truth, asserted with no
+ * hedge, and the grouped row's own timestamp was replaced by "↳ same payment",
+ * removing the one piece of evidence that would have exposed it. Keeping
+ * adjacency as a fallback for rows whose id is null would restore that
+ * inversion on precisely those rows, so there is none: a payout with no
+ * `related_expense_id`, or whose expense is not on the loaded page, renders as
+ * its own unpaired row. That is honest -- an unpaired payout is not a claim.
  */
 function groupRelatedRows(rows: TimelineRow[]): TimelineRow[][] {
+  const expenseAt = new Map<string, number>();
+  rows.forEach((r, i) => {
+    if (r.kind === "expense") expenseAt.set(r.link_id, i);
+  });
+
+  const partnerOf = new Map<number, number>();
+  const claimed = new Set<number>();
+  rows.forEach((r, i) => {
+    if (r.kind !== "payout" || !r.related_expense_id) return;
+    const j = expenseAt.get(r.related_expense_id);
+    // `claimed` guards the one-to-one: the FK cannot legitimately point two
+    // payouts at one expense, and if the data ever did, the second payout
+    // stays unpaired rather than the expense being rendered twice.
+    if (j === undefined || claimed.has(j)) return;
+    claimed.add(j);
+    partnerOf.set(i, j);
+  });
+
   const groups: TimelineRow[][] = [];
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const next = rows[i + 1];
-    const isPair =
-      next &&
-      row.amount !== null &&
-      next.amount !== null &&
-      Number(row.amount) === Number(next.amount) &&
-      ((row.kind === "payout" && next.kind === "expense") ||
-        (row.kind === "expense" && next.kind === "payout"));
-    if (isPair) {
-      groups.push([row, next]);
-      i += 1;
-    } else {
-      groups.push([row]);
-    }
-  }
+  rows.forEach((r, i) => {
+    if (claimed.has(i)) return; // rendered beneath its payout instead
+    const j = partnerOf.get(i);
+    groups.push(j === undefined ? [r] : [r, rows[j]]);
+  });
   return groups;
 }
 
@@ -74,40 +87,61 @@ export function ActivityTab({ employerId }: { employerId: string }) {
   const [kind, setKind] = React.useState<string>("");
   const [before, setBefore] = React.useState<string | undefined>(undefined);
   const [rows, setRows] = React.useState<TimelineRow[]>([]);
+  const [exhausted, setExhausted] = React.useState(false);
+  const applied = React.useRef<Set<string>>(new Set());
+  const seen = React.useRef<Set<string>>(new Set());
 
-  const { data, loading, error, refetch } = useDarajaResource<ActivityEnvelope>(
+  const { data, dataKey, loading, error, refetch } = useDarajaResource<ActivityEnvelope>(
     `/employers/${employerId}/activity/`,
     before ? { before } : undefined,
   );
+
+  const requestKey = JSON.stringify(before ? { before } : {});
+  // Only ever the response fetched FOR the request now showing -- `data`
+  // still holds the previous page while the next one is in flight, and
+  // appending that would double the page on screen (see CursorList, C1).
+  const page = dataKey === requestKey ? data : null;
 
   // The endpoint's `results` may legitimately hold more than the requested
   // `limit` (a tied page boundary is extended, never split) -- accumulate
   // exactly what came back, never re-slice it down to a fixed size.
   //
-  // Deduped by (kind, link_type, link_id) on append: a "Load older" click
-  // that lands while the previous fetch for the same `before` is still in
-  // flight -- or a page whose oldest row ties on `occurred_at` with rows
-  // already on screen -- must not double a row that's already showing.
+  // Deduped by (kind, link_type, link_id) on append: a page whose oldest rows
+  // tie on `occurred_at` with rows already on screen re-delivers them, and the
+  // same movement must not be listed twice.
   React.useEffect(() => {
-    if (!data) return;
-    setRows((prev) => {
-      if (!before) return data.results;
-      const seen = new Set(prev.map((r) => `${r.kind}:${r.link_type}:${r.link_id}`));
-      const fresh = data.results.filter(
-        (r) => !seen.has(`${r.kind}:${r.link_type}:${r.link_id}`),
-      );
-      return [...prev, ...fresh];
-    });
-  }, [data, before]);
+    if (!page || dataKey === null) return;
+    if (!before) {
+      applied.current = new Set([dataKey]);
+      seen.current = new Set(page.results.map(rowKeyOf));
+      setRows(page.results);
+      return;
+    }
+    if (applied.current.has(dataKey)) return;
+    applied.current.add(dataKey);
 
-  const filtered = kind ? rows.filter((r) => r.kind === kind) : rows;
-  const groups = React.useMemo(() => groupRelatedRows(filtered), [filtered]);
+    const fresh = page.results.filter((r) => !seen.current.has(rowKeyOf(r)));
+    fresh.forEach((r) => seen.current.add(rowKeyOf(r)));
 
-  // No `next`/`count` on this envelope (dashboard/services/timeline.py is
-  // cursor-by-timestamp, not cursor-by-token), so "no more history" is
-  // inferred the only way available: the most recent older-page fetch came
-  // back empty.
-  const exhausted = before !== undefined && !!data && data.results.length === 0;
+    // TERMINATION IS DECIDED ON THE RESPONSE AND THE CURSOR, not on what
+    // survives de-duplication. `before` is the timestamp of the oldest row on
+    // screen; if a page adds no row older than that, the cursor cannot
+    // advance and every further click re-issues the identical request
+    // forever, with no visible progress (whole-branch review, I3).
+    const nextOldest = fresh.length
+      ? fresh[fresh.length - 1].occurred_at
+      : before;
+    if (page.results.length === 0 || nextOldest === before) setExhausted(true);
+    if (fresh.length) setRows((prev) => [...prev, ...fresh]);
+  }, [page, dataKey, before]);
+
+  // Memoised on the inputs, not on a fresh array: `filtered` used to be
+  // rebuilt every render, so useMemo([filtered]) never once hit (M3).
+  const groups = React.useMemo(
+    () => groupRelatedRows(kind ? rows.filter((r) => r.kind === kind) : rows),
+    [rows, kind],
+  );
+
   const oldest = rows.length ? rows[rows.length - 1].occurred_at : undefined;
 
   if (error) return <ErrorState message={error} onRetry={refetch} />;
@@ -161,27 +195,31 @@ export function ActivityTab({ employerId }: { employerId: string }) {
               groups.map((group) =>
                 group.map((r, i) => (
                   <TableRow
-                    key={`${r.kind}:${r.link_type}:${r.link_id}`}
+                    key={rowKeyOf(r)}
                     className={cn(group.length > 1 && "bg-brand-soft/25")}
                   >
-                    <TableCell>
-                      {i === 0 ? (
-                        formatDateTime(r.occurred_at)
-                      ) : (
-                        <span className="pl-3 text-text-muted">↳ same payment</span>
-                      )}
+                    {/*
+                      BOTH timestamps are always shown. The grouped row used to
+                      render "↳ same payment" in place of its own time, which
+                      removed the only evidence an operator could have used to
+                      catch a mis-paired row. The pairing is a real FK now, but
+                      a row's own time is still a fact about that row and the
+                      screen does not get to withhold it.
+                    */}
+                    <TableCell className={cn(i > 0 && "pl-6 text-text-muted")}>
+                      {formatDateTime(r.occurred_at)}
                     </TableCell>
                     <TableCell>
                       <StatusBadge variant="neutral">{KIND_LABEL[r.kind]}</StatusBadge>
                       {group.length > 1 ? (
                         <span className="ml-2 text-[10px] uppercase text-text-muted">
-                          linked
+                          {i === 0 ? "settles below" : "settled by above"}
                         </span>
                       ) : null}
                     </TableCell>
                     <TableCell className="whitespace-normal">{r.summary}</TableCell>
                     <TableCell>
-                      {r.amount === null ? "—" : formatMoney(Number(r.amount))}
+                      {r.amount === null ? "—" : formatMoney(r.amount)}
                     </TableCell>
                     <TableCell>
                       <span className="font-mono text-xs">{r.reference}</span>
