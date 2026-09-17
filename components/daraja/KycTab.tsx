@@ -1,24 +1,12 @@
 // components/daraja/KycTab.tsx
+// The only tab without "use client" -- harmless, since its importer is a
+// client component, but inconsistent with its six siblings (M7).
+"use client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusBadge, type StatusVariant } from "@/components/ui/status_badge";
+import { StatusBadge } from "@/components/ui/status_badge";
 import { formatDate } from "@/lib/format";
+import { kycLabel, kycVariant } from "@/lib/kyc";
 import type { MerchantDetail } from "@/types/daraja";
-
-// Employer.kyc_status can be NULL on historical rows even though the field
-// is typed as a plain string (see the roster's own kycVariant/kycLabel,
-// app/daraja/(ops)/merchants/page.tsx) -- duplicated here rather than
-// exported, matching that page's own precedent, since neither is in the
-// shared component list this plan reuses from.
-const kycVariant = (s: string | null | undefined): StatusVariant =>
-  s === "approved" ? "success" : s === "rejected" ? "danger" : s ? "warning" : "neutral";
-
-const kycLabel = (s: string | null | undefined): string => {
-  if (!s) return "Unknown";
-  return s
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-};
 
 const DOC_LABELS: Record<string, string> = {
   business_licence: "Business licence",

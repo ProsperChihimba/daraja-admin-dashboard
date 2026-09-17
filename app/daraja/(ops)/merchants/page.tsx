@@ -1,4 +1,8 @@
-// app/(app)/daraja/merchants/page.tsx
+// app/daraja/(ops)/merchants/page.tsx  (URL: /daraja/merchants)
+//
+// Moved out of app/(app)/ in Task 7: that group's layout wraps every page in
+// RequireAuth, which gates on the Ankara superuser Redux session an ops
+// account does not have. The header above still named the pre-`git mv` path.
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -10,28 +14,14 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { StatusBadge, type StatusVariant } from "@/components/ui/status_badge";
+import { StatusBadge } from "@/components/ui/status_badge";
 import { DateRangeFilter, EMPTY_RANGE, type DateRange } from "@/components/common/DateRangeFilter";
 import { formatMoney, formatDate, formatRelative } from "@/lib/format";
 import { useDarajaResource } from "@/lib/darajaAuth";
+import { kycLabel, kycVariant } from "@/lib/kyc";
 import type { MerchantRow, Paginated } from "@/types/daraja";
 
 const PAGE_SIZE = 50;
-
-// The model's own comment records NULL kyc_status on historical rows, even
-// though MerchantRow types the field as a plain string (types/daraja.ts).
-// Both helpers take the wider type on purpose and never render the string
-// "null" -- an unset status reads as "Unknown", not a false "warning".
-const kycVariant = (s: string | null | undefined): StatusVariant =>
-  s === "approved" ? "success" : s === "rejected" ? "danger" : s ? "warning" : "neutral";
-
-const kycLabel = (s: string | null | undefined): string => {
-  if (!s) return "Unknown";
-  return s
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-};
 
 // Employer.KYC_STATUSES (employer/models.py) -- the backend 400s on any
 // value outside this set, so the filter options must be its exact vocabulary,
@@ -88,7 +78,9 @@ export default function MerchantsPage() {
     // a real, unexceptional state (see L&M Tutashinda, 2026-09-16), rendered
     // here as TZS 0 rather than hidden or special-cased.
     { key: "balance", header: "Balance",
-      render: (m) => formatMoney(Number(m.balance)) },
+      // The serialized string, handed straight to formatMoney -- Number()
+      // here was the same coercion the detail header just dropped.
+      render: (m) => formatMoney(m.balance) },
     { key: "last_activity_at", header: "Last activity",
       render: (m) => formatRelative(m.last_activity_at) },
     { key: "registered", header: "Registered",
