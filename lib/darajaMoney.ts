@@ -58,10 +58,14 @@ function groupThousands(digits: string): string {
 /**
  * The digits to display for one amount, or null if it cannot be read.
  *
- * Exported for the one caller that needs the amount without the "TZS" prefix;
- * `formatOpsMoney` is what screens normally use.
+ * MODULE-PRIVATE. It was exported, under a comment claiming "the one caller
+ * that needs the amount without the TZS prefix" -- no such caller has ever
+ * existed anywhere in the repo. A comment asserting a caller that is not
+ * there is worse than no comment: the next person greps for it, finds
+ * nothing, and doubts the grep rather than the comment. Export it when a
+ * screen genuinely needs bare digits, and not before.
  */
-export function opsAmountDigits(
+function opsAmountDigits(
   value: string | number | null | undefined,
 ): string | null {
   let raw: string | null = null;
