@@ -38,10 +38,9 @@ export interface MerchantRow {
 /**
  * GET /employers/<id>/ -- EmployerDetailSerializer's own field set
  * (dashboard/serializers/employers.py), NOT an extension of MerchantRow:
- * the detail endpoint never emits `balance` or `last_activity_at` -- those
- * two are computed on the roster row only, from annotations the detail
- * queryset doesn't carry. Extending MerchantRow would type-check and read
- * `undefined` at runtime on a money field.
+ * the detail endpoint does not emit `last_activity_at`, which is computed on
+ * the roster row only. Extending MerchantRow would type-check and read
+ * `undefined` at runtime.
  */
 export interface MerchantDetail {
   employer_id: string;
@@ -68,8 +67,22 @@ export interface MerchantDetail {
   phone_verified_at: string | null;
   email_verified_at: string | null;
   registered: string;
-  /** null when the employer has no active CollectionAccount -- a real,
-   *  unexceptional state (a fresh signup, or one never issued a wallet). */
+  /**
+   * THIS MERCHANT'S TOTAL MONEY, as a string -- every wallet they hold,
+   * summed, including inactive ones. It reads the same annotation the roster's
+   * `balance` reads, so the two screens agree by construction; `wallet` below
+   * is ONE wallet and is smaller whenever a merchant holds branch wallets
+   * (Swahilies: balance 58738.43, wallet.balance 51738.43).
+   *
+   * Never null: a merchant holding no wallet at all serialises as the string
+   * "0". Keep it a string -- no parseFloat, no arithmetic, no `|| 0`.
+   */
+  balance: string;
+  /** The first-opened ACTIVE CollectionAccount, or null when the merchant has
+   *  none -- a real, unexceptional state (a fresh signup, one never issued a
+   *  wallet, or one whose only wallet has been deactivated). Note `balance`
+   *  above can still be non-zero when this is null: an inactive wallet still
+   *  holds the merchant's money. */
   wallet: { account_id: string; account_no: string; balance: string } | null;
   /** The three S3 URL fields that exist today (get_documents). A
    *  structured EmployerDocument table is a later plan, not assumed here. */
@@ -90,6 +103,18 @@ export interface TimelineRow {
   reference: string;
   link_type: string;
   link_id: string;
+  /**
+   * The `Expenses.expense_id` this payout settles -- `ExpensePayout.expense_id`,
+   * the FK column of a OneToOneField (dashboard/services/timeline.py).
+   *
+   * Set on PAYOUT rows only; null on every other kind, expense rows included
+   * (an expense's own id is already `link_id`). It is a CharField, so it is a
+   * STRING, never a number: compare it with `===` against an expense row's
+   * `link_id` and do not coerce it. This is the only sound way to pair the two
+   * rows -- pairing by adjacency and equal amount attaches a payment to the
+   * wrong expense.
+   */
+  related_expense_id: string | null;
 }
 
 /**
@@ -108,7 +133,14 @@ export interface ExpenseRow {
   expense_id: string;
   expense_type: string;
   description: string;
-  amount: string;
+  /**
+   * A JSON NUMBER, not a string: `Expenses.amount` is a FloatField
+   * (expenses/models.py:39), so ExpenseRowSerializer emits `1000.0`. Typed as
+   * `string` this read as a lie the next screen would inherit (M4). It is the
+   * one money field on these tabs that is not a Decimal-backed string; every
+   * other one (Entry, DepositIntent, wallet balances, the merchant total) is.
+   */
+  amount: number;
   status: string;
   expense_date: string;
   payout_state: string | null;
@@ -127,6 +159,7 @@ export interface DepositRow {
   amount: string;
   state: string;
   description: string;
+  /** Defaults to "" rather than NULL for legacy intents (wallets/models.py). */
   source_account_number: string;
   registered: string;
 }
@@ -137,16 +170,32 @@ export interface CardRow {
   registered: string;
 }
 
-export interface PeoplePayload {
-  // Employee.full_name and Employee.phone_number are both
-  // `blank=True, null=True` (employee/models.py) and EmployeeRowSerializer
-  // (dashboard/serializers/employer_tabs.py) emits null for either -- typed
-  // as non-null `string` here would type-check and render the string "null"
-  // for a real, unexceptional row.
-  employees: {
-    employee_id: string;
-    full_name: string | null;
-    phone_number: string | null;
-  }[];
-  branches: { branch_id: string; name: string }[];
+// Employee.full_name and Employee.phone_number are both
+// `blank=True, null=True` (employee/models.py) and EmployeeRowSerializer
+// (dashboard/serializers/employer_tabs.py) emits null for either -- typed
+// as non-null `string` here would type-check and render the string "null"
+// for a real, unexceptional row.
+export interface EmployeeRow {
+  employee_id: string;
+  full_name: string | null;
+  phone_number: string | null;
+}
+
+export interface BranchRow {
+  branch_id: string;
+  name: string;
+}
+
+/**
+ * GET /employers/<id>/people/ -- employees are the CURSOR-PAGINATED body of
+ * this payload (`results`/`next`/`previous`, page_size default 50, max 200);
+ * branches ride alongside the envelope and are complete, not paginated
+ * (dashboard/views/employer_tabs.py::EmployerPeople).
+ *
+ * It was `{employees: [...], branches: [...]}` with no paginator and no cap.
+ * Extending CursorPaged rather than restating the envelope is what lets this
+ * payload be accumulated by the same hook as the other five tabs.
+ */
+export interface PeoplePayload extends CursorPaged<EmployeeRow> {
+  branches: BranchRow[];
 }
