@@ -14,7 +14,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { ErrorState, LoadingBlock } from "@/components/common/PageStates";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusBadge, type StatusVariant } from "@/components/ui/status_badge";
+import { StatusBadge } from "@/components/ui/status_badge";
 import { ActivityTab } from "@/components/daraja/ActivityTab";
 import { ExpensesTab } from "@/components/daraja/ExpensesTab";
 import { WalletTab } from "@/components/daraja/WalletTab";
@@ -23,30 +23,21 @@ import { PeopleTab } from "@/components/daraja/PeopleTab";
 import { KycTab } from "@/components/daraja/KycTab";
 import { formatMoney, formatDate } from "@/lib/format";
 import { useDarajaResource } from "@/lib/darajaAuth";
+import { kycLabel, kycVariant } from "@/lib/kyc";
 import type { MerchantDetail } from "@/types/daraja";
-
-// Same convention as the roster (app/daraja/(ops)/merchants/page.tsx):
-// Employer.kyc_status can be NULL on historical rows even though it types as
-// a plain string, so "Unknown" is a real state here, never the literal
-// string "null". Duplicated locally rather than exported, matching that
-// page's own precedent -- neither helper is on this plan's shared-component
-// list.
-const kycVariant = (s: string | null | undefined): StatusVariant =>
-  s === "approved" ? "success" : s === "rejected" ? "danger" : s ? "warning" : "neutral";
-
-const kycLabel = (s: string | null | undefined): string => {
-  if (!s) return "Unknown";
-  return s
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-};
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
+      {/*
+        `||`, not `??`. Every column below is `blank=True` on Employer and an
+        EMPTY STRING is live data -- MASHTEMI was approved with TIN, licence,
+        BRELA and email all blank -- which `??` renders as a blank cell that
+        reads as a broken screen rather than as "not provided" (M1). Matches
+        the account_no treatment below.
+      */}
       <div className="text-xs text-text-muted">{label}</div>
-      <div className="text-text">{value ?? "—"}</div>
+      <div className="text-text">{value || "—"}</div>
     </div>
   );
 }
@@ -93,16 +84,22 @@ export default function MerchantDetailPage() {
       />
 
       {m.wallet === null ? (
-        // A merchant this active and this fully approved with no wallet at
-        // all is a real state, not a data bug -- see L&M Tutashinda,
-        // 2026-09-16. No code path in the system creates one today, so this
-        // card can only warn; wallet creation is a money action that
-        // arrives with the money-actions plan, not this one.
+        // `wallet` is the first-opened ACTIVE CollectionAccount, so null here
+        // means "no ACTIVE wallet" -- not necessarily "no wallet at all",
+        // which is what this card used to claim. The distinction is live:
+        // MASHTEMI's sole wallet is inactive and still holds 300, and the
+        // Balance card above counts it, so "no wallet at all" beside a
+        // non-zero balance would read as a broken screen. A merchant with no
+        // wallet whatsoever is also a real state (L&M Tutashinda,
+        // 2026-09-16) and shows TZS 0. No code path in the system creates a
+        // wallet today, so this card can only warn; wallet creation is a
+        // money action that arrives with the money-actions plan.
         <Card className="mb-4 border border-danger-fg">
-          <CardHeader><CardTitle>No wallet</CardTitle></CardHeader>
+          <CardHeader><CardTitle>No active wallet</CardTitle></CardHeader>
           <CardContent className="text-sm">
-            This merchant has no wallet at all, so every payout they attempt
-            will fail before it starts. There is nothing to fix from this
+            This merchant has no active wallet, so every payout they attempt
+            will fail before it starts. Any balance shown above is money held
+            in wallets that are not active. There is nothing to fix from this
             screen -- creating a wallet is a money action for a later plan.
           </CardContent>
         </Card>
@@ -125,18 +122,31 @@ export default function MerchantDetailPage() {
               <CardHeader><CardTitle>Balance</CardTitle></CardHeader>
               <CardContent className="text-2xl font-semibold">
                 {/*
-                  EmployerDetailSerializer never emits `balance` -- that's a
-                  roster-only annotation (dashboard/serializers/employers.py).
-                  The detail screen's only source of truth for money is the
-                  wallet object itself, and `wallet` can be null.
+                  `m.balance`, NOT `m.wallet.balance`. The detail serializer
+                  now emits a top-level `balance` -- the SUM of every wallet
+                  this merchant holds, off the same annotation the roster
+                  reads, so the two screens agree by construction. `wallet` is
+                  one wallet: for Swahilies (two wallets) it reads 51,738.43
+                  against a real total of 58,738.43, and the header
+                  contradicted the roster row the operator clicked through
+                  from. Passed to formatMoney as the STRING it is -- no
+                  Number(), no `|| 0`; a default on a money field is how a
+                  real 12,500 came to render as 0.
                 */}
-                {m.wallet ? formatMoney(Number(m.wallet.balance)) : "—"}
+                {formatMoney(m.balance)}
               </CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle>Wallet</CardTitle></CardHeader>
               <CardContent className="font-mono text-sm">
-                {m.wallet?.account_no || "none"}
+                {/*
+                  Three distinct facts, three distinct readings: no active
+                  wallet at all; an active wallet whose account_no is the
+                  empty string (CollectionAccount.account_no is blank=True and
+                  Cheka Plus really is stored that way); and a real number. A
+                  merchant with no wallet must never read as a funded wallet.
+                */}
+                {m.wallet ? m.wallet.account_no || "number not set" : "no wallet"}
               </CardContent>
             </Card>
             <Card>
@@ -145,7 +155,7 @@ export default function MerchantDetailPage() {
                 <div className="text-text">{m.tier ?? "no tier set"}</div>
                 <div className="text-text-muted">
                   {m.monthly_cap_tzs
-                    ? `${formatMoney(Number(m.monthly_cap_tzs))} / month (stored, not enforced)`
+                    ? `${formatMoney(m.monthly_cap_tzs)} / month (stored, not enforced)`
                     : "no cap set"}
                 </div>
               </CardContent>
