@@ -16,8 +16,10 @@ export function ExpensesTab({ employerId }: { employerId: string }) {
           render: (e) => formatDateTime(e.expense_date) },
         { key: "expense_type", header: "Type" },
         { key: "description", header: "Description" },
+        // Expenses.amount really is a JSON number here (FloatField), unlike
+        // every other money field on these tabs -- see ExpenseRow.amount.
         { key: "amount", header: "Amount",
-          render: (e) => formatMoney(Number(e.amount)) },
+          render: (e) => formatMoney(e.amount) },
         { key: "status", header: "Status",
           render: (e) => <StatusBadge variant={
             e.status === "Success" ? "success"
