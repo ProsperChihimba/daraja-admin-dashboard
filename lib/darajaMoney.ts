@@ -61,7 +61,9 @@ function groupThousands(digits: string): string {
  * Exported for the one caller that needs the amount without the "TZS" prefix;
  * `formatOpsMoney` is what screens normally use.
  */
-export function opsAmountDigits(value: string | number): string | null {
+export function opsAmountDigits(
+  value: string | number | null | undefined,
+): string | null {
   let raw: string | null = null;
   if (typeof value === "number") {
     // `Expenses.amount` is the one money field on these tabs that arrives as a
@@ -103,8 +105,27 @@ export function opsAmountDigits(value: string | number): string | null {
  * Pass the string DRF sent, unconverted. Never coerce it first: `Number()` on
  * the way in is how a real figure becomes NaN, and NaN is how a merchant's
  * money becomes "TZS 0".
+ *
+ * IT ACCEPTS null AND undefined ON PURPOSE, even though most of the fields
+ * handed to it are typed non-null. A TypeScript type is a claim about the
+ * backend's contract, not a guarantee about the bytes that arrive, and this
+ * branch hard-depends on three contract changes that live only on an unmerged
+ * backend branch. If this frontend ever reaches an environment first --
+ * deploy order, a rollback, a future contract drift -- `m.balance` is simply
+ * absent. The old path was `formatMoney(undefined)` -> `Number(undefined)` ->
+ * `NaN` -> `formatNumber` returns "0" -> EVERY MERCHANT'S HEADER READS
+ * "TZS 0", silently, while a merchant holding 58,738 looks like a merchant
+ * holding nothing (whole-branch review, I3). Accepting the absent value here
+ * and rendering an em dash is what makes that failure visible instead of
+ * plausible. Deploy order is the real fix for today's mismatch; this is the
+ * fix for the class.
+ *
+ * A zero is an assertion about a merchant's money. It is displayed only when
+ * the backend actually said zero.
  */
-export function formatOpsMoney(value: string | number): string {
+export function formatOpsMoney(
+  value: string | number | null | undefined,
+): string {
   const digits = opsAmountDigits(value);
   return digits === null ? UNKNOWN_AMOUNT : `TZS ${digits}`;
 }

@@ -220,13 +220,21 @@ export function ActivityTab({ employerId }: { employerId: string }) {
                     </TableCell>
                     <TableCell className="whitespace-normal">{r.summary}</TableCell>
                     <TableCell>
-                      {/*
-                        A card_load row's amount is CardTopUp.tzs_amount,
-                        DecimalField(20,2) off a captured USD rate -- 2,512.47
-                        is the ordinary shape, and the shared formatMoney
-                        showed it as "TZS 2,512" (lib/darajaMoney.ts).
-                      */}
-                      {r.amount === null ? "—" : formatOpsMoney(r.amount)}
+                    {/*
+                      A card_load row's amount is CardTopUp.tzs_amount,
+                      DecimalField(20,2) off a captured USD rate -- 2,512.47
+                      is the ordinary shape, and the shared formatMoney showed
+                      it as "TZS 2,512" (lib/darajaMoney.ts).
+
+                      `amount` is allow_null on the serializer and null on the
+                      kinds that carry no figure. No `=== null` ternary here
+                      any more: the formatter renders the same em dash for a
+                      null as for an absent or unreadable value, so there is
+                      ONE answer to "this screen cannot state an amount" and
+                      no call site can forget to guard (whole-branch review,
+                      I3).
+                    */}
+                      {formatOpsMoney(r.amount)}
                     </TableCell>
                     <TableCell>
                       <span className="font-mono text-xs">{r.reference}</span>

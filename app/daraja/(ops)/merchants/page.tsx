@@ -84,7 +84,11 @@ export default function MerchantsPage() {
       // balance is a Sum over CollectionAccount.balance, DecimalField(50,5),
       // so it arrives as "51738.43000"; the ops formatter drops the trailing
       // zeros and keeps every digit that says something
-      // (lib/darajaMoney.ts).
+      // (lib/darajaMoney.ts). A merchant with no wallet at all annotates to
+      // NULL and the serializer states "0" -- that zero is the backend's
+      // claim and is shown. A MISSING `balance` is not a claim and renders
+      // "—": this column used to turn an absent field into a confident
+      // TZS 0 for every row (whole-branch review, I3).
       render: (m) => formatOpsMoney(m.balance) },
     { key: "last_activity_at", header: "Last activity",
       render: (m) => formatRelative(m.last_activity_at) },

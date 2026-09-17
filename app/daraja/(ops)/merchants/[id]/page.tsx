@@ -133,6 +133,15 @@ export default function MerchantDetailPage() {
                   from. Passed to formatMoney as the STRING it is -- no
                   Number(), no `|| 0`; a default on a money field is how a
                   real 12,500 came to render as 0.
+
+                  AND IF THE FIELD IS NOT THERE AT ALL, this reads "—", not
+                  "TZS 0". `balance` landed on an unmerged backend branch
+                  (981ac37/4a8c2f9/0954ac1); deployed ahead of it, this header
+                  used to render Number(undefined) -> NaN -> formatNumber's
+                  "0" for EVERY merchant, silently. Deploy order fixes today's
+                  mismatch; formatOpsMoney fixes the class, because the same
+                  hazard returns on any future contract drift
+                  (lib/darajaMoney.ts, whole-branch review, I3).
                 */}
                 {formatOpsMoney(m.balance)}
               </CardContent>
