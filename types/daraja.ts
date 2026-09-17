@@ -28,7 +28,16 @@ export interface MerchantRow {
   business_name: string | null;
   phone_number: string | null;
   email_address: string | null;
-  kyc_status: string;
+  /**
+   * NULLABLE, like `MerchantDetail.kyc_status` below. `Employer.kyc_status` is
+   * `blank=True, null=True` (employer/models.py:65) and historical rows really
+   * do carry NULL. Typed as a plain `string` this was a type lie of the same
+   * class as the old `ExpenseRow.amount: string`: nothing breaks today because
+   * every render path goes through lib/kyc.ts, which takes the wider type on
+   * purpose -- but the two interfaces disagreed about one column, and the next
+   * screen inherits whichever it reads (whole-branch review, M5).
+   */
+  kyc_status: string | null;
   active: boolean;
   registered: string;
   balance: string;

@@ -28,8 +28,15 @@ export function WalletTab({ employerId }: { employerId: string }) {
             // (lib/darajaMoney.ts). Signed, too: a debit renders negative.
             { key: "amount", header: "Amount",
               render: (e) => formatOpsMoney(e.amount) },
+            // Movement.reference is `blank=True, default=""`
+            // (wallets/models.py:58) -- a movement recorded without one is
+            // ordinary, and rendered a blank cell that reads as a broken
+            // screen. `||`, not `??`: the empty string is the live value
+            // here, exactly as on the Deposits "From" column below (M3).
             { key: "reference", header: "Reference",
-              render: (e) => <span className="font-mono text-xs">{e.reference}</span> },
+              render: (e) => (
+                <span className="font-mono text-xs">{e.reference || "—"}</span>
+              ) },
           ]}
         />
       </section>

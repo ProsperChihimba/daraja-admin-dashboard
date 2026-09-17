@@ -1,6 +1,8 @@
 // components/daraja/KycTab.tsx
-// The only tab without "use client" -- harmless, since its importer is a
-// client component, but inconsistent with its six siblings (M7).
+// A client component, like its six siblings. The comment that used to sit
+// here claimed this was "the only tab without \"use client\"" -- directly
+// above the "use client" line -- which was true of an earlier revision and
+// has been false since (whole-branch review, M4).
 "use client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status_badge";
