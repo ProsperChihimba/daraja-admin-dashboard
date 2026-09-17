@@ -140,13 +140,29 @@ export default function MerchantDetailPage() {
               <CardHeader><CardTitle>Wallet</CardTitle></CardHeader>
               <CardContent className="font-mono text-sm">
                 {/*
-                  Three distinct facts, three distinct readings: no active
-                  wallet at all; an active wallet whose account_no is the
-                  empty string (CollectionAccount.account_no is blank=True and
-                  Cheka Plus really is stored that way); and a real number. A
-                  merchant with no wallet must never read as a funded wallet.
+                  "NO ACTIVE WALLET", NOT "NO WALLET" -- this card used to
+                  render the latter and it is a claim the data does not
+                  support. `wallet` is the first-opened ACTIVE
+                  CollectionAccount (get_wallet filters active=True), while
+                  `balance` beside it sums EVERY wallet with no active filter
+                  (dashboard/queries.py). So the two cards disagree for a real
+                  shape: MASHTEMI's sole wallet is inactive and still holds
+                  300, which serialises as `wallet: null, balance: "300"` and
+                  rendered as "Balance TZS 300 | Wallet no wallet" -- a screen
+                  contradicting itself beside a merchant's money, and pointing
+                  the operator at a wallet-creation problem when the real fact
+                  is a deactivated wallet. This card now says exactly what the
+                  red card above says.
+
+                  The narrower fact -- no CollectionAccount row at all (L&M
+                  Tutashinda, 2026-09-16) -- is still legible: that merchant's
+                  Balance card reads TZS 0 beside this one, whereas MASHTEMI's
+                  reads TZS 300. Three readings survive: no active wallet; an
+                  active wallet whose account_no is the empty string
+                  (blank=True, and Cheka Plus really is stored that way); and a
+                  real number.
                 */}
-                {m.wallet ? m.wallet.account_no || "number not set" : "no wallet"}
+                {m.wallet ? m.wallet.account_no || "number not set" : "no active wallet"}
               </CardContent>
             </Card>
             <Card>
