@@ -138,6 +138,15 @@ export interface CardRow {
 }
 
 export interface PeoplePayload {
-  employees: { employee_id: string; full_name: string; phone_number: string }[];
+  // Employee.full_name and Employee.phone_number are both
+  // `blank=True, null=True` (employee/models.py) and EmployeeRowSerializer
+  // (dashboard/serializers/employer_tabs.py) emits null for either -- typed
+  // as non-null `string` here would type-check and render the string "null"
+  // for a real, unexceptional row.
+  employees: {
+    employee_id: string;
+    full_name: string | null;
+    phone_number: string | null;
+  }[];
   branches: { branch_id: string; name: string }[];
 }
