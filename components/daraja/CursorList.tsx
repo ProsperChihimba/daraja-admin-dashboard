@@ -102,10 +102,31 @@ export function CursorList<T>({
   const { rows, loading, error, refetch, nextCursor, loadMore } =
     useCursorPages<T>(path);
 
-  if (error) return <ErrorState message={error} onRetry={refetch} />;
+  // ONLY a failure with nothing to show takes the whole area. An error three
+  // pages into a statement used to replace the entire table with ErrorState:
+  // the accumulated rows survived in state but vanished from the screen, so
+  // an operator reading a merchant's money lost their place -- and could not
+  // tell whether the rows were gone or merely hidden -- because one request
+  // failed (whole-branch review, M2). The rows already read stay; the error
+  // is reported above them, with the same Retry.
+  if (error && !rows.length) return <ErrorState message={error} onRetry={refetch} />;
+
+  // "Still loading" and "that was the last page" are two different facts and
+  // used to render identically: `nextCursor` derives from `page`, which is
+  // null from the click until the response lands, so the button UNMOUNTED
+  // while its own next page was in flight and its disabled/"Loading…" state
+  // was unreachable (whole-branch review, M1). It stays mounted while a
+  // further page is loading, and disappears only when the last page has
+  // actually arrived with `next: null`.
+  const showLoadMore = Boolean(nextCursor) || (loading && rows.length > 0);
 
   return (
     <>
+      {error ? (
+        <div className="mb-3">
+          <ErrorState message={error} onRetry={refetch} />
+        </div>
+      ) : null}
       <DataTable
         columns={columns}
         rows={rows}
@@ -113,12 +134,12 @@ export function CursorList<T>({
         rowKey={rowKey}
         emptyMessage={emptyMessage}
       />
-      {nextCursor ? (
+      {showLoadMore ? (
         <div className="py-3 text-center">
           <Button
             variant="outline"
             size="sm"
-            disabled={loading}
+            disabled={loading || !nextCursor}
             onClick={loadMore}
           >
             {loading ? "Loading…" : "Load more"}

@@ -55,9 +55,17 @@ export function PeopleTab({ employerId }: { employerId: string }) {
               render: (e) => e.phone_number ?? "—" },
           ]}
         />
-        {nextCursor ? (
+        {/*
+          Mounted while the next page is in flight, not just while a next
+          cursor is known: `nextCursor` comes from `page`, which is null from
+          the click until the response lands, so this button used to vanish
+          mid-load and "loading" looked exactly like "that was the last page"
+          (whole-branch review, M1).
+        */}
+        {nextCursor || (loading && employees.length > 0) ? (
           <div className="py-3 text-center">
-            <Button variant="outline" size="sm" disabled={loading} onClick={loadMore}>
+            <Button variant="outline" size="sm"
+                    disabled={loading || !nextCursor} onClick={loadMore}>
               {loading ? "Loading…" : "Load more employees"}
             </Button>
           </div>
