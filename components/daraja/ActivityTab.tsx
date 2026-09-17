@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status_badge";
 import { formatDateTime } from "@/lib/format";
 import { formatOpsMoney } from "@/lib/darajaMoney";
-import { useDarajaResource } from "@/lib/darajaAuth";
+import { darajaDataKey, useDarajaResource } from "@/lib/darajaAuth";
 import { cn } from "@/lib/utils";
 import type { ActivityEnvelope, TimelineRow } from "@/types/daraja";
 
@@ -92,12 +92,32 @@ export function ActivityTab({ employerId }: { employerId: string }) {
   const applied = React.useRef<Set<string>>(new Set());
   const seen = React.useRef<Set<string>>(new Set());
 
+  // THIS TAB ACCUMULATES ACROSS A PATH THAT COMES FROM A DYNAMIC ROUTE
+  // SEGMENT, which is the same hazard CursorList documents. `before`, `rows`,
+  // `seen` and `exhausted` all describe ONE merchant's timeline; Next.js
+  // reuses this component instance when the operator moves from merchant A to
+  // merchant B, so without the reset below merchant A's `before` timestamp
+  // would be sent to merchant B's endpoint and A's rows would stay on screen
+  // under B's name. Reset during render (not in an effect) so the fetch effect
+  // below never commits holding the previous merchant's cursor.
+  const path = `/employers/${employerId}/activity/`;
+  const [pathShowing, setPathShowing] = React.useState(path);
+  if (path !== pathShowing) {
+    setPathShowing(path);
+    setBefore(undefined);
+    setRows([]);
+    setExhausted(false);
+    // Unlike `applied`, `seen` is rebuilt only on the `!before` branch below,
+    // which the reset guarantees is the branch the next response takes.
+  }
+
   const { data, dataKey, loading, error, refetch } = useDarajaResource<ActivityEnvelope>(
-    `/employers/${employerId}/activity/`,
+    path,
     before ? { before } : undefined,
   );
 
-  const requestKey = JSON.stringify(before ? { before } : {});
+  // Same function the hook keys responses by -- see CursorList.
+  const requestKey = darajaDataKey(path, before ? { before } : undefined);
   // Only ever the response fetched FOR the request now showing -- `data`
   // still holds the previous page while the next one is in flight, and
   // appending that would double the page on screen (see CursorList, C1).

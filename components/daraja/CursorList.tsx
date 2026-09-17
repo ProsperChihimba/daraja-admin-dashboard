@@ -4,7 +4,7 @@ import * as React from "react";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { ErrorState } from "@/components/common/PageStates";
 import { Button } from "@/components/ui/button";
-import { useDarajaResource } from "@/lib/darajaAuth";
+import { darajaDataKey, useDarajaResource } from "@/lib/darajaAuth";
 import type { CursorPaged } from "@/types/daraja";
 
 /**
@@ -30,6 +30,18 @@ import type { CursorPaged } from "@/types/daraja";
  * would have hidden this bug rather than fixed it, and it would equally hide
  * genuine repeats -- two real payments of the same amount, seconds apart, are
  * ordinary on a statement and must both be shown.
+ *
+ * A DIFFERENT `path` IS A DIFFERENT RESULT SET, and this hook now says so
+ * itself. `cursor`, `rows` and `applied` all describe ONE query; carried into
+ * another they are not merely stale, they are wrong -- the old cursor asks the
+ * new query to resume from a position taken in the old one (so page one of the
+ * new query is never fetched), and the old rows stay on screen underneath the
+ * new query's controls. That was live in shipped code: PeopleTab's path is
+ * built from a dynamic-route `employerId`, and Next.js reuses the component
+ * instance across merchant-to-merchant navigation, so merchant A's employees
+ * were left rendered under merchant B's name. Callers used to have to defend
+ * themselves with `key={path}` and every caller that forgot was silently
+ * wrong; the reset below makes correctness the default.
  */
 export function useCursorPages<T, E extends CursorPaged<T> = CursorPaged<T>>(
   path: string,
@@ -37,12 +49,35 @@ export function useCursorPages<T, E extends CursorPaged<T> = CursorPaged<T>>(
   const [cursor, setCursor] = React.useState<string | undefined>(undefined);
   const [rows, setRows] = React.useState<T[]>([]);
   const applied = React.useRef<Set<string>>(new Set());
+
+  // Reset DURING RENDER, not in an effect. React discards this render and
+  // re-runs it before committing, so the `useDarajaResource` call below never
+  // reaches its fetch effect holding the previous query's cursor -- an effect
+  // would run only AFTER a committed render had already dispatched a request
+  // for the new path carrying the old cursor. This is React's documented
+  // "adjusting state when a prop changes" pattern, and it is the whole reason
+  // the reset is here rather than in a useEffect.
+  //
+  // `applied` is deliberately NOT cleared here: `dataKey` now carries the path
+  // (lib/darajaAuth.ts), so a key recorded under the previous path can never
+  // collide with one under the new path, and the `!cursor` branch below
+  // rebuilds the set from scratch when the first page lands.
+  const [pathShowing, setPathShowing] = React.useState(path);
+  if (path !== pathShowing) {
+    setPathShowing(path);
+    setCursor(undefined);
+    setRows([]);
+  }
+
   const { data, dataKey, loading, error, refetch } = useDarajaResource<E>(
     path,
     cursor ? { cursor } : undefined,
   );
 
-  const requestKey = JSON.stringify(cursor ? { cursor } : {});
+  // Built with the SAME function the hook keys its responses by -- never by
+  // hand. A hand-rolled `JSON.stringify({cursor})` would no longer match what
+  // `useDarajaResource` stores, and every response would look stale forever.
+  const requestKey = darajaDataKey(path, cursor ? { cursor } : undefined);
   // The response for what is being asked for NOW, or nothing. Everything
   // below reads this rather than `data`, so a page held over from an earlier
   // cursor can neither be appended nor hand back its already-consumed `next`.

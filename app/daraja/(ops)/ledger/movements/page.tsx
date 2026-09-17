@@ -14,8 +14,9 @@
 //
 // THE HAZARD THIS FILE IS SHAPED AROUND: FILTERS ON TOP OF A CURSOR.
 // `useCursorPages` accumulates pages into state that belongs to its component
-// instance -- `cursor`, `rows`, and the `applied` ref. Nothing in it watches
-// `path`. So if the path changed underneath a live instance:
+// instance -- `cursor`, `rows`, and the `applied` ref. When this file was
+// written nothing in it watched `path`, so if the path changed underneath a
+// live instance:
 //
 //   * the already-advanced `cursor` would be sent to the NEW query, asking the
 //     new result set to resume from a position taken in the old one, and page
@@ -27,13 +28,19 @@
 //     the new filter's controls, with no error and no empty state to hint at
 //     it.
 //
-// That is not a bug in the hook; the hook is scoped to one query by design
-// (and its append-once-per-cursor rule, the Critical from Plan 1, is exactly
-// what must not be reimplemented here). The fix is to make "a different query"
-// mean "a different component instance": <MovementsList> is keyed on the very
-// path it fetches, so React unmounts the old instance and mounts a fresh one
-// whenever any filter changes, discarding cursor, rows and applied together.
-// One expression, at the only place that knows a filter moved.
+// THAT IS NOW FIXED IN THE HOOK ITSELF (Task 9). `useDarajaResource` keys a
+// held response by its path as well as its params, and `useCursorPages` resets
+// `cursor` and `rows` when `path` changes, so a varying path is correct for
+// every caller rather than only for the callers that remembered to defend
+// themselves. The append-once-per-cursor rule, the Critical from Plan 1, is
+// untouched and must still never be reimplemented here.
+//
+// `key={path}` below is therefore no longer load-bearing. It is kept as an
+// explicit statement of the same intent at the call site -- a new filter is a
+// new list -- and because unmounting additionally discards the held response
+// inside `useDarajaResource`, which the hook-level reset masks but does not
+// clear. Removing it would not reintroduce the bug; leaving it does not hide
+// one.
 "use client";
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
@@ -249,11 +256,12 @@ export function MovementsExplorer({ initialAccountId = "" }: { initialAccountId?
         <DateRangeFilter value={dates} onChange={setDates} />
       </div>
 
-      {/* THE KEY IS THE POINT -- see the file header. `path` identifies the
-          query, so any filter change mounts a fresh list and the previous
-          filter's accumulated rows, cursor and applied-set go with the old
-          instance. Without it the operator would silently be reading one
-          filter's rows under another filter's controls. */}
+      {/* `path` identifies the query, so any filter change mounts a fresh list
+          and the previous filter's accumulated rows, cursor and applied-set go
+          with the old instance. Since Task 9 this is belt-and-braces rather
+          than the fix: `useCursorPages` resets itself on a path change and
+          `useDarajaResource` keys its held response by path, so removing this
+          would not reintroduce the stale-rows bug -- see the file header. */}
       <MovementsList key={path} path={path} />
     </>
   );
