@@ -10,8 +10,17 @@
 // of every out-of-scope Ankara page for a console that will move real money
 // in a later plan -- a duplicated, narrower guard is the safer trade.
 //
-// AppSidebar and Topbar are reused, not forked -- AppSidebar has no Ankara
-// dependency at all. Topbar now takes optional onLogout/displayName/
+// AppSidebar and Topbar are reused, not forked. AppSidebar rendered the one
+// shared `sidebarConfig`, so an ops account -- which by construction has no
+// Ankara Redux session -- was shown Organizations, Subscriptions, Support,
+// System and Audit Log, all of which enter app/(app)/, hit RequireAuth and
+// bounce to Ankara's /login: a login form for a different service, inside the
+// shell the operator was just using, which reads as an expired session rather
+// than a wrong link (whole-branch review, I4). It now takes an optional
+// `groups` prop, defaulting to `sidebarConfig`, and this layout passes
+// `darajaSidebarConfig` -- app/(app)/layout.tsx's bare <AppSidebar /> is
+// unchanged and renders the same list it always did.
+// Topbar likewise takes optional onLogout/displayName/
 // showSearch props (components/shell/Topbar.tsx) precisely so this layout
 // can supply Daraja's own logout, the real ops user's name, and suppress
 // the search box (it points at /search, an Ankara-gated page an ops
@@ -22,6 +31,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import AppSidebar from "@/components/shell/AppSidebar";
 import Topbar from "@/components/shell/Topbar";
+import { darajaSidebarConfig } from "@/config/sidebar";
 import { LoadingBlock } from "@/components/common/PageStates";
 import { getOpsAccess } from "@/lib/darajaApi";
 import { darajaLogout, darajaMe } from "@/lib/darajaAuth";
@@ -70,7 +80,7 @@ export default function DarajaOpsLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <AppSidebar />
+      <AppSidebar groups={darajaSidebarConfig} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar onLogout={darajaLogout} displayName={displayName(user)} showSearch={false} />
         <main className="min-w-0 flex-1 p-6">{children}</main>
