@@ -2,7 +2,8 @@
 "use client";
 import { CursorList } from "@/components/daraja/CursorList";
 import { StatusBadge } from "@/components/ui/status_badge";
-import { formatMoney, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
+import { formatOpsMoney } from "@/lib/darajaMoney";
 import type { ExpenseRow } from "@/types/daraja";
 
 export function ExpensesTab({ employerId }: { employerId: string }) {
@@ -18,8 +19,11 @@ export function ExpensesTab({ employerId }: { employerId: string }) {
         { key: "description", header: "Description" },
         // Expenses.amount really is a JSON number here (FloatField), unlike
         // every other money field on these tabs -- see ExpenseRow.amount.
+        // formatOpsMoney takes it as the number it is and still shows every
+        // decimal it carries; the shared formatMoney rounded 2,512.47 to
+        // "TZS 2,512" (lib/darajaMoney.ts).
         { key: "amount", header: "Amount",
-          render: (e) => formatMoney(e.amount) },
+          render: (e) => formatOpsMoney(e.amount) },
         { key: "status", header: "Status",
           render: (e) => <StatusBadge variant={
             e.status === "Success" ? "success"

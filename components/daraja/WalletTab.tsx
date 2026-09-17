@@ -1,7 +1,8 @@
 // components/daraja/WalletTab.tsx
 "use client";
 import { CursorList } from "@/components/daraja/CursorList";
-import { formatMoney, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
+import { formatOpsMoney } from "@/lib/darajaMoney";
 import type { DepositRow, EntryRow } from "@/types/daraja";
 
 export function WalletTab({ employerId }: { employerId: string }) {
@@ -18,9 +19,15 @@ export function WalletTab({ employerId }: { employerId: string }) {
               render: (e) => formatDateTime(e.created) },
             { key: "movement_kind", header: "Movement" },
             // Entry.amount is a Decimal serialized as a string -- handed to
-            // formatMoney as the string it is, never through Number() first.
+            // the formatter as the string it is, never through Number()
+            // first. THE 2-DECIMAL COLUMN: Entry.amount is
+            // DecimalField(20,2) and carries the ledger legs of a card load,
+            // so 2,512.47 and 0.30 are both ordinary here. The shared
+            // formatMoney rounded them to "TZS 2,512" and "TZS 0" -- this
+            // column is exactly why the ops screens have their own formatter
+            // (lib/darajaMoney.ts). Signed, too: a debit renders negative.
             { key: "amount", header: "Amount",
-              render: (e) => formatMoney(e.amount) },
+              render: (e) => formatOpsMoney(e.amount) },
             { key: "reference", header: "Reference",
               render: (e) => <span className="font-mono text-xs">{e.reference}</span> },
           ]}
@@ -36,7 +43,7 @@ export function WalletTab({ employerId }: { employerId: string }) {
             { key: "registered", header: "When",
               render: (d) => formatDateTime(d.registered) },
             { key: "amount", header: "Amount",
-              render: (d) => formatMoney(d.amount) },
+              render: (d) => formatOpsMoney(d.amount) },
             { key: "state", header: "State" },
             // DepositIntent.source_account_number defaults to "" rather than
             // NULL (wallets/models.py), so a legacy intent renders a blank

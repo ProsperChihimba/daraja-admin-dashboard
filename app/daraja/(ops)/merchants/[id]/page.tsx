@@ -21,7 +21,8 @@ import { WalletTab } from "@/components/daraja/WalletTab";
 import { CardsTab } from "@/components/daraja/CardsTab";
 import { PeopleTab } from "@/components/daraja/PeopleTab";
 import { KycTab } from "@/components/daraja/KycTab";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
+import { formatOpsMoney } from "@/lib/darajaMoney";
 import { useDarajaResource } from "@/lib/darajaAuth";
 import { kycLabel, kycVariant } from "@/lib/kyc";
 import type { MerchantDetail } from "@/types/daraja";
@@ -133,7 +134,7 @@ export default function MerchantDetailPage() {
                   Number(), no `|| 0`; a default on a money field is how a
                   real 12,500 came to render as 0.
                 */}
-                {formatMoney(m.balance)}
+                {formatOpsMoney(m.balance)}
               </CardContent>
             </Card>
             <Card>
@@ -171,7 +172,7 @@ export default function MerchantDetailPage() {
                 <div className="text-text">{m.tier ?? "no tier set"}</div>
                 <div className="text-text-muted">
                   {m.monthly_cap_tzs
-                    ? `${formatMoney(m.monthly_cap_tzs)} / month (stored, not enforced)`
+                    ? `${formatOpsMoney(m.monthly_cap_tzs)} / month (stored, not enforced)`
                     : "no cap set"}
                 </div>
               </CardContent>

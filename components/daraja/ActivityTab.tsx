@@ -13,7 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/common/PageStates";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status_badge";
-import { formatMoney, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
+import { formatOpsMoney } from "@/lib/darajaMoney";
 import { useDarajaResource } from "@/lib/darajaAuth";
 import { cn } from "@/lib/utils";
 import type { ActivityEnvelope, TimelineRow } from "@/types/daraja";
@@ -219,7 +220,13 @@ export function ActivityTab({ employerId }: { employerId: string }) {
                     </TableCell>
                     <TableCell className="whitespace-normal">{r.summary}</TableCell>
                     <TableCell>
-                      {r.amount === null ? "—" : formatMoney(r.amount)}
+                      {/*
+                        A card_load row's amount is CardTopUp.tzs_amount,
+                        DecimalField(20,2) off a captured USD rate -- 2,512.47
+                        is the ordinary shape, and the shared formatMoney
+                        showed it as "TZS 2,512" (lib/darajaMoney.ts).
+                      */}
+                      {r.amount === null ? "—" : formatOpsMoney(r.amount)}
                     </TableCell>
                     <TableCell>
                       <span className="font-mono text-xs">{r.reference}</span>

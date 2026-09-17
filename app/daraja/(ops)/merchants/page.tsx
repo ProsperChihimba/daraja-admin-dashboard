@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status_badge";
 import { DateRangeFilter, EMPTY_RANGE, type DateRange } from "@/components/common/DateRangeFilter";
-import { formatMoney, formatDate, formatRelative } from "@/lib/format";
+import { formatDate, formatRelative } from "@/lib/format";
+import { formatOpsMoney } from "@/lib/darajaMoney";
 import { useDarajaResource } from "@/lib/darajaAuth";
 import { kycLabel, kycVariant } from "@/lib/kyc";
 import type { MerchantRow, Paginated } from "@/types/daraja";
@@ -78,9 +79,13 @@ export default function MerchantsPage() {
     // a real, unexceptional state (see L&M Tutashinda, 2026-09-16), rendered
     // here as TZS 0 rather than hidden or special-cased.
     { key: "balance", header: "Balance",
-      // The serialized string, handed straight to formatMoney -- Number()
-      // here was the same coercion the detail header just dropped.
-      render: (m) => formatMoney(m.balance) },
+      // The serialized string, handed straight to the formatter -- Number()
+      // here was the same coercion the detail header just dropped. The
+      // balance is a Sum over CollectionAccount.balance, DecimalField(50,5),
+      // so it arrives as "51738.43000"; the ops formatter drops the trailing
+      // zeros and keeps every digit that says something
+      // (lib/darajaMoney.ts).
+      render: (m) => formatOpsMoney(m.balance) },
     { key: "last_activity_at", header: "Last activity",
       render: (m) => formatRelative(m.last_activity_at) },
     { key: "registered", header: "Registered",
