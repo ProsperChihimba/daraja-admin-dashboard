@@ -92,16 +92,33 @@ export function ActivityTab({ employerId }: { employerId: string }) {
   const applied = React.useRef<Set<string>>(new Set());
   const seen = React.useRef<Set<string>>(new Set());
 
-  const { data, dataKey, loading, error, refetch } = useDarajaResource<ActivityEnvelope>(
-    `/employers/${employerId}/activity/`,
-    before ? { before } : undefined,
-  );
+  // THIS TAB ACCUMULATES ACROSS A PATH THAT COMES FROM A DYNAMIC ROUTE
+  // SEGMENT, which is the same hazard CursorList documents. `before`, `rows`,
+  // `seen` and `exhausted` all describe ONE merchant's timeline; Next.js
+  // reuses this component instance when the operator moves from merchant A to
+  // merchant B, so without the reset below merchant A's `before` timestamp
+  // would be sent to merchant B's endpoint and A's rows would stay on screen
+  // under B's name. Reset during render (not in an effect) so the fetch effect
+  // below never commits holding the previous merchant's cursor.
+  const path = `/employers/${employerId}/activity/`;
+  const [pathShowing, setPathShowing] = React.useState(path);
+  if (path !== pathShowing) {
+    setPathShowing(path);
+    setBefore(undefined);
+    setRows([]);
+    setExhausted(false);
+    // Unlike `applied`, `seen` is rebuilt only on the `!before` branch below,
+    // which the reset guarantees is the branch the next response takes.
+  }
 
-  const requestKey = JSON.stringify(before ? { before } : {});
+  const { data, dataKey, isCurrent, loading, error, refetch } =
+    useDarajaResource<ActivityEnvelope>(path, before ? { before } : undefined);
+
   // Only ever the response fetched FOR the request now showing -- `data`
   // still holds the previous page while the next one is in flight, and
   // appending that would double the page on screen (see CursorList, C1).
-  const page = dataKey === requestKey ? data : null;
+  // `isCurrent` comes from the hook; this file no longer rebuilds its key.
+  const page = isCurrent ? data : null;
 
   // The endpoint's `results` may legitimately hold more than the requested
   // `limit` (a tied page boundary is extended, never split) -- accumulate
@@ -189,7 +206,22 @@ export function ActivityTab({ employerId }: { employerId: string }) {
             ) : groups.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="p-0">
-                  <EmptyState message="Nothing recorded for this merchant yet." />
+                  {/* THE EMPTY STATE MUST NOT BLAME THE MERCHANT FOR THE
+                      FILTER. "Nothing recorded for this merchant yet." is a
+                      statement about the merchant's data, and it was rendered
+                      verbatim while a `kind` filter was hiding rows that had
+                      already loaded -- a false statement about a merchant, on
+                      a console whose job is to say what is true about one.
+                      The filter is client-side and survives a merchant
+                      switch, so this is reachable the moment an operator
+                      moves from a merchant with payouts to one without. */}
+                  <EmptyState
+                    message={
+                      kind && rows.length > 0
+                        ? `No ${KIND_LABEL[kind as TimelineRow["kind"]]} rows in the ${rows.length} activit${rows.length === 1 ? "y row" : "y rows"} loaded — the ${KIND_LABEL[kind as TimelineRow["kind"]]} filter is hiding the rest. Choose All to see them.`
+                        : "Nothing recorded for this merchant yet."
+                    }
+                  />
                 </TableCell>
               </TableRow>
             ) : (

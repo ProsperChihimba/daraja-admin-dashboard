@@ -30,6 +30,18 @@ import type { CursorPaged } from "@/types/daraja";
  * would have hidden this bug rather than fixed it, and it would equally hide
  * genuine repeats -- two real payments of the same amount, seconds apart, are
  * ordinary on a statement and must both be shown.
+ *
+ * A DIFFERENT `path` IS A DIFFERENT RESULT SET, and this hook now says so
+ * itself. `cursor`, `rows` and `applied` all describe ONE query; carried into
+ * another they are not merely stale, they are wrong -- the old cursor asks the
+ * new query to resume from a position taken in the old one (so page one of the
+ * new query is never fetched), and the old rows stay on screen underneath the
+ * new query's controls. That was live in shipped code: PeopleTab's path is
+ * built from a dynamic-route `employerId`, and Next.js reuses the component
+ * instance across merchant-to-merchant navigation, so merchant A's employees
+ * were left rendered under merchant B's name. Callers used to have to defend
+ * themselves with `key={path}` and every caller that forgot was silently
+ * wrong; the reset below makes correctness the default.
  */
 export function useCursorPages<T, E extends CursorPaged<T> = CursorPaged<T>>(
   path: string,
@@ -37,16 +49,56 @@ export function useCursorPages<T, E extends CursorPaged<T> = CursorPaged<T>>(
   const [cursor, setCursor] = React.useState<string | undefined>(undefined);
   const [rows, setRows] = React.useState<T[]>([]);
   const applied = React.useRef<Set<string>>(new Set());
-  const { data, dataKey, loading, error, refetch } = useDarajaResource<E>(
-    path,
-    cursor ? { cursor } : undefined,
-  );
 
-  const requestKey = JSON.stringify(cursor ? { cursor } : {});
+  // Reset DURING RENDER, not in an effect. React discards this render and
+  // re-runs it before committing, so the `useDarajaResource` call below never
+  // reaches its fetch effect holding the previous query's cursor -- an effect
+  // would run only AFTER a committed render had already dispatched a request
+  // for the new path carrying the old cursor. This is React's documented
+  // "adjusting state when a prop changes" pattern, and it is the whole reason
+  // the reset is here rather than in a useEffect.
+  //
+  // `applied` is deliberately NOT cleared here: `dataKey` now carries the path
+  // (lib/darajaAuth.ts), so a key recorded under the previous path can never
+  // collide with one under the new path, and the `!cursor` branch below
+  // rebuilds the set from scratch when the first page lands.
+  const [pathShowing, setPathShowing] = React.useState(path);
+  if (path !== pathShowing) {
+    setPathShowing(path);
+    setCursor(undefined);
+    setRows([]);
+  }
+
+  const { data, dataKey, isCurrent, loading, error, refetch } =
+    useDarajaResource<E>(path, cursor ? { cursor } : undefined);
+
+  // THE RESET ABOVE DOES NOT TOUCH `loading`, AND FOR ONE COMMIT THAT LIED.
+  // `loading` lives in useDarajaResource and only turns true inside `refetch`,
+  // which runs from a passive effect -- so the committed render immediately
+  // after a path change held `rows: []`, `loading: false`, `error: null`, and
+  // CursorList below rendered its emptyMessage: "No deposit intents match this
+  // filter." about a filter that had not been asked yet. (In PeopleTab the
+  // same commit rendered an empty Employees table beside the PREVIOUS
+  // merchant's branch list, which is the cross-tenant class the reset exists
+  // to remove, surviving in a state variable the reset does not reach.)
+  //
+  // `isCurrent` already answers this exactly: it is false whenever the held
+  // response was not fetched for what is being asked for now, which covers
+  // the reset window, the first mount, and a page in flight. An error is
+  // excluded so a failure still renders as a failure rather than as a
+  // permanent spinner.
+  const settling = !isCurrent && error === null;
+
   // The response for what is being asked for NOW, or nothing. Everything
   // below reads this rather than `data`, so a page held over from an earlier
   // cursor can neither be appended nor hand back its already-consumed `next`.
-  const page = dataKey === requestKey ? data : null;
+  //
+  // `isCurrent` COMES FROM THE HOOK. This file used to rebuild the hook's key
+  // itself, and so did ActivityTab, which meant the composition formula lived
+  // in three places and a third consumer that got it slightly wrong would show
+  // an empty list forever while its requests all succeeded (review, Important
+  // 1). `dataKey` below is used only as an opaque token for `applied`.
+  const page = isCurrent ? data : null;
 
   React.useEffect(() => {
     if (!page || dataKey === null) return;
@@ -73,7 +125,8 @@ export function useCursorPages<T, E extends CursorPaged<T> = CursorPaged<T>>(
   return {
     rows,
     page,
-    loading,
+    // A freshly reset list reports itself as loading, never as empty.
+    loading: loading || settling,
     error,
     refetch,
     nextCursor,
