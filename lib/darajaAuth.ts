@@ -54,12 +54,17 @@ export async function darajaMe(): Promise<DarajaAdminUser> {
  * Activity). Verified by executing the real components against both the
  * pre-fix and post-fix code (Task 9).
  *
- * EVERY caller that compares a held response against what it is asking for
- * now MUST build its comparison key with THIS function, never by hand: a
- * hand-built `JSON.stringify({cursor})` no longer matches what the hook
- * stores, and the mismatch would make every response look stale forever.
+ * MODULE-PRIVATE, DELIBERATELY. This was exported, and both accumulating
+ * callers rebuilt their comparison key by calling it -- which put the
+ * composition formula in three places at once. A future third consumer that
+ * reconstructs it by hand instead, as the plausible `JSON.stringify({cursor})`,
+ * would never match what the hook stores: its `page` would be null forever and
+ * its list would show the EMPTY STATE PERMANENTLY WHILE EVERY REQUEST
+ * SUCCEEDED -- silent, and indistinguishable from "this merchant has no rows"
+ * (Task 9 review, Important 1). Callers are no longer handed the formula at
+ * all; they ask the hook itself, via `isCurrent` below.
  */
-export function darajaDataKey(
+function darajaDataKey(
   path: string,
   params?: Record<string, unknown>,
 ): string {
@@ -69,18 +74,26 @@ export function darajaDataKey(
 /**
  * The Daraja twin of useAdminResource, on the Daraja client.
  *
- * RETURNS `dataKey` AS WELL AS `data`, and callers that accumulate pages MUST
- * check it. `data` holds the PREVIOUS response until the next one lands --
- * the hook never clears it while loading, deliberately, so a table does not
+ * RETURNS `isCurrent` AS WELL AS `data`, and callers that accumulate pages
+ * MUST check it. `data` holds the PREVIOUS response until the next one lands
+ * -- the hook never clears it while loading, deliberately, so a table does not
  * blank out between pages. That means "data is present" does NOT mean "data
  * answers the request you are currently showing": a component that changes a
  * param and appends `data.results` appends the page it already had. That is
  * exactly how CursorList came to render page 1 twice on every "Load more"
- * click, in four money tables (whole-branch review, C1). `dataKey` is
- * `darajaDataKey(path, params)` -- the PATH AND the params the held `data`
- * was actually fetched for -- so a caller can compare it against what it is
- * asking for now and ignore a response that belongs to an earlier request,
- * whether that request differed in its params or in its path.
+ * click, in four money tables (whole-branch review, C1).
+ *
+ * `isCurrent` answers that question and is the ONLY thing a caller should
+ * gate on: it is true when the held `data` was fetched for exactly the path
+ * AND params being asked for right now -- so a response belonging to an
+ * earlier request is ignored whether it differed in its params or in its
+ * path. The composition of the key stays inside this file (see above); a
+ * caller that rebuilds it by hand can get it subtly wrong and then render an
+ * empty list forever while its requests all return 200.
+ *
+ * `dataKey` is still returned, but ONLY as an opaque identity token for an
+ * accumulator's already-applied set. Nothing outside this file composes,
+ * parses or reconstructs it.
  *
  * It also guards STALE RESPONSES: each call takes a sequence number and a
  * response that resolves after a newer request was dispatched is dropped
@@ -142,5 +155,16 @@ export function useDarajaResource<T>(
   useEffect(() => {
     void refetch();
   }, [refetch]);
-  return { data: state.data, dataKey: state.key, loading, error, refetch };
+  return {
+    data: state.data,
+    // Opaque identity token -- for an accumulator's applied-set only.
+    dataKey: state.key,
+    // "Is the response I am holding the one you are asking for?" -- computed
+    // here, where the key's composition is known, so no call site has to
+    // reproduce it.
+    isCurrent: state.key === key,
+    loading,
+    error,
+    refetch,
+  };
 }

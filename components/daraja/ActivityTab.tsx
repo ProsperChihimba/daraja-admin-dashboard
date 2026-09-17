@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status_badge";
 import { formatDateTime } from "@/lib/format";
 import { formatOpsMoney } from "@/lib/darajaMoney";
-import { darajaDataKey, useDarajaResource } from "@/lib/darajaAuth";
+import { useDarajaResource } from "@/lib/darajaAuth";
 import { cn } from "@/lib/utils";
 import type { ActivityEnvelope, TimelineRow } from "@/types/daraja";
 
@@ -111,17 +111,14 @@ export function ActivityTab({ employerId }: { employerId: string }) {
     // which the reset guarantees is the branch the next response takes.
   }
 
-  const { data, dataKey, loading, error, refetch } = useDarajaResource<ActivityEnvelope>(
-    path,
-    before ? { before } : undefined,
-  );
+  const { data, dataKey, isCurrent, loading, error, refetch } =
+    useDarajaResource<ActivityEnvelope>(path, before ? { before } : undefined);
 
-  // Same function the hook keys responses by -- see CursorList.
-  const requestKey = darajaDataKey(path, before ? { before } : undefined);
   // Only ever the response fetched FOR the request now showing -- `data`
   // still holds the previous page while the next one is in flight, and
   // appending that would double the page on screen (see CursorList, C1).
-  const page = dataKey === requestKey ? data : null;
+  // `isCurrent` comes from the hook; this file no longer rebuilds its key.
+  const page = isCurrent ? data : null;
 
   // The endpoint's `results` may legitimately hold more than the requested
   // `limit` (a tied page boundary is extended, never split) -- accumulate

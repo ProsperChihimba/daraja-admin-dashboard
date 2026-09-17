@@ -4,7 +4,7 @@ import * as React from "react";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { ErrorState } from "@/components/common/PageStates";
 import { Button } from "@/components/ui/button";
-import { darajaDataKey, useDarajaResource } from "@/lib/darajaAuth";
+import { useDarajaResource } from "@/lib/darajaAuth";
 import type { CursorPaged } from "@/types/daraja";
 
 /**
@@ -69,19 +69,19 @@ export function useCursorPages<T, E extends CursorPaged<T> = CursorPaged<T>>(
     setRows([]);
   }
 
-  const { data, dataKey, loading, error, refetch } = useDarajaResource<E>(
-    path,
-    cursor ? { cursor } : undefined,
-  );
+  const { data, dataKey, isCurrent, loading, error, refetch } =
+    useDarajaResource<E>(path, cursor ? { cursor } : undefined);
 
-  // Built with the SAME function the hook keys its responses by -- never by
-  // hand. A hand-rolled `JSON.stringify({cursor})` would no longer match what
-  // `useDarajaResource` stores, and every response would look stale forever.
-  const requestKey = darajaDataKey(path, cursor ? { cursor } : undefined);
   // The response for what is being asked for NOW, or nothing. Everything
   // below reads this rather than `data`, so a page held over from an earlier
   // cursor can neither be appended nor hand back its already-consumed `next`.
-  const page = dataKey === requestKey ? data : null;
+  //
+  // `isCurrent` COMES FROM THE HOOK. This file used to rebuild the hook's key
+  // itself, and so did ActivityTab, which meant the composition formula lived
+  // in three places and a third consumer that got it slightly wrong would show
+  // an empty list forever while its requests all succeeded (review, Important
+  // 1). `dataKey` below is used only as an opaque token for `applied`.
+  const page = isCurrent ? data : null;
 
   React.useEffect(() => {
     if (!page || dataKey === null) return;
