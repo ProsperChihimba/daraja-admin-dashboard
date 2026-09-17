@@ -206,7 +206,22 @@ export function ActivityTab({ employerId }: { employerId: string }) {
             ) : groups.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="p-0">
-                  <EmptyState message="Nothing recorded for this merchant yet." />
+                  {/* THE EMPTY STATE MUST NOT BLAME THE MERCHANT FOR THE
+                      FILTER. "Nothing recorded for this merchant yet." is a
+                      statement about the merchant's data, and it was rendered
+                      verbatim while a `kind` filter was hiding rows that had
+                      already loaded -- a false statement about a merchant, on
+                      a console whose job is to say what is true about one.
+                      The filter is client-side and survives a merchant
+                      switch, so this is reachable the moment an operator
+                      moves from a merchant with payouts to one without. */}
+                  <EmptyState
+                    message={
+                      kind && rows.length > 0
+                        ? `No ${KIND_LABEL[kind as TimelineRow["kind"]]} rows in the ${rows.length} activit${rows.length === 1 ? "y row" : "y rows"} loaded — the ${KIND_LABEL[kind as TimelineRow["kind"]]} filter is hiding the rest. Choose All to see them.`
+                        : "Nothing recorded for this merchant yet."
+                    }
+                  />
                 </TableCell>
               </TableRow>
             ) : (

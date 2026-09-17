@@ -36,6 +36,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { CursorList } from "@/components/daraja/CursorList";
+import { RefreshControl } from "@/components/daraja/RefreshControl";
 import { useDarajaResource } from "@/lib/darajaAuth";
 import { formatDateTime } from "@/lib/format";
 import { formatOpsMoney } from "@/lib/darajaMoney";
@@ -336,6 +337,7 @@ export function DepositsScreen({ initialTab = "unmatched" }: { initialTab?: stri
     data: unmatched,
     loading: unmatchedLoading,
     error: unmatchedError,
+    fetchedAt: unmatchedFetchedAt,
     refetch: refetchUnmatched,
   } = useDarajaResource<UnmatchedDebitsPayload>("/deposits/unmatched-debits/");
 
@@ -344,6 +346,24 @@ export function DepositsScreen({ initialTab = "unmatched" }: { initialTab?: stri
       <PageHeader
         title="Deposits"
         subtitle="The three queues that need a human: debits nobody owns, credits nobody claimed, and declared deposits."
+        /* THE COUNT IN THE TAB LABEL NEVER REFRESHED. It is fetched once per
+           mount, and its only `refetch` was wired to ErrorState's Retry --
+           reachable only after the request had already failed. So the number
+           the design says should have surfaced the 2026-09-16 incident sat
+           frozen at whatever it was when the tab was opened, with nothing on
+           screen saying how old it was. In the header rather than inside the
+           Unmatched-debits panel because the badge it refreshes is legible
+           from all three tabs. Manual, not a poll -- see RefreshControl. */
+        actions={
+          <RefreshControl
+            label="Unmatched debits"
+            fetchedAt={unmatchedFetchedAt}
+            busy={unmatchedLoading}
+            onRefresh={() => {
+              void refetchUnmatched();
+            }}
+          />
+        }
       />
 
       <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>

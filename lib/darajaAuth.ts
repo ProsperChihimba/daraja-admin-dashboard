@@ -108,9 +108,18 @@ export function useDarajaResource<T>(
   const enabled = options?.enabled ?? true;
   // data and the key it was fetched for move together, in ONE state update:
   // two useStates would render once with the new data beside the old key.
-  const [state, setState] = useState<{ data: T | null; key: string | null }>({
+  // `fetchedAt` rides in the SAME state object for the same reason `key`
+  // does: a separate useState would render once with the new data beside the
+  // old timestamp, and a timestamp that is wrong for one commit is worse than
+  // none on a screen whose whole job is saying how old a number is.
+  const [state, setState] = useState<{
+    data: T | null;
+    key: string | null;
+    fetchedAt: number | null;
+  }>({
     data: null,
     key: null,
+    fetchedAt: null,
   });
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +136,7 @@ export function useDarajaResource<T>(
     try {
       const res = await darajaApi.get<T>(path, { params });
       if (seq !== sequence.current) return;
-      setState({ data: res.data, key });
+      setState({ data: res.data, key, fetchedAt: Date.now() });
     } catch (e) {
       if (seq !== sequence.current) return;
       // dashboard_exception_handler nests every raised DRF exception as
@@ -163,6 +172,14 @@ export function useDarajaResource<T>(
     // here, where the key's composition is known, so no call site has to
     // reproduce it.
     isCurrent: state.key === key,
+    // WHEN THE HELD RESPONSE ACTUALLY ARRIVED, in client wall-clock ms, or
+    // null before the first one lands. The ops screens fetch once per mount
+    // and every figure on them is that old; `halt.age_seconds` and each
+    // `last_runs[*].age_seconds` are computed on the SERVER at this moment
+    // too, so they do not count up afterwards however live they look. A
+    // screen read through an incident has to be able to say when it last
+    // asked, and nothing in the payload can say it.
+    fetchedAt: state.fetchedAt,
     loading,
     error,
     refetch,

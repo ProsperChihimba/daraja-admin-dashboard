@@ -72,6 +72,23 @@ export function useCursorPages<T, E extends CursorPaged<T> = CursorPaged<T>>(
   const { data, dataKey, isCurrent, loading, error, refetch } =
     useDarajaResource<E>(path, cursor ? { cursor } : undefined);
 
+  // THE RESET ABOVE DOES NOT TOUCH `loading`, AND FOR ONE COMMIT THAT LIED.
+  // `loading` lives in useDarajaResource and only turns true inside `refetch`,
+  // which runs from a passive effect -- so the committed render immediately
+  // after a path change held `rows: []`, `loading: false`, `error: null`, and
+  // CursorList below rendered its emptyMessage: "No deposit intents match this
+  // filter." about a filter that had not been asked yet. (In PeopleTab the
+  // same commit rendered an empty Employees table beside the PREVIOUS
+  // merchant's branch list, which is the cross-tenant class the reset exists
+  // to remove, surviving in a state variable the reset does not reach.)
+  //
+  // `isCurrent` already answers this exactly: it is false whenever the held
+  // response was not fetched for what is being asked for now, which covers
+  // the reset window, the first mount, and a page in flight. An error is
+  // excluded so a failure still renders as a failure rather than as a
+  // permanent spinner.
+  const settling = !isCurrent && error === null;
+
   // The response for what is being asked for NOW, or nothing. Everything
   // below reads this rather than `data`, so a page held over from an earlier
   // cursor can neither be appended nor hand back its already-consumed `next`.
@@ -108,7 +125,8 @@ export function useCursorPages<T, E extends CursorPaged<T> = CursorPaged<T>>(
   return {
     rows,
     page,
-    loading,
+    // A freshly reset list reports itself as loading, never as empty.
+    loading: loading || settling,
     error,
     refetch,
     nextCursor,

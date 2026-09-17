@@ -232,6 +232,17 @@ export interface PeoplePayload extends CursorPaged<EmployeeRow> {
 //     which is DRF CursorPagination -- `CursorPaged<T>` above, not
 //     `Paginated<T>` (no `count`). `UnmatchedDebitsPayload` is the one
 //     exception: that view builds its own `Response`, not a paginator.
+//
+// AND THE BACKEND'S OWN FIX WAVE (dashboard commits 1f23310, c6dea03), read
+// from the source rather than from a summary:
+//   * `LedgerLeg` gained `is_house_account`, and the OLD RULE IS WRONG. A
+//     null `business_name` no longer means "house account" -- see the field.
+//   * `/ledger/accounts/`: `total` keeps its key but now means the HOUSE'S
+//     OWN money (the pool mirror excluded); `pool_mirror` and a per-row
+//     `is_pool_mirror` are new.
+//   * `last_runs[cmd]` gained `skipped` -- the third state, "could not run".
+//   * the position payload gained `unmatched_error`, so `unmatched_count`
+//     finally has the `*_error` sibling every other nullable number here had.
 
 /** One non-wallet ledger account, or a wallet ops has designated for a
  *  system purpose (Revenue, Card Top-ups, Lipa Namba) -- GET
@@ -247,11 +258,39 @@ export interface OpsAccountRow {
   balance: string;
   wallet_account_id: string | null;
   designation: string | null;
+  /**
+   * This row is the POOL MIRROR, not one of the house's own accounts.
+   *
+   * The `pool` account mirrors everything sitting in the pooled Selcom
+   * account, customers' money included (dashboard/views/ledger.py:67-79).
+   * Its `balance` is still reported on the row, and it is deliberately NOT
+   * part of `OpsAccountsPayload.total`. A screen that lets these read as the
+   * same kind of money is telling an operator the house holds funds it is
+   * merely holding FOR somebody.
+   */
+  is_pool_mirror: boolean;
 }
 
 export interface OpsAccountsPayload {
   accounts: OpsAccountRow[];
+  /**
+   * THE HOUSE'S OWN MONEY -- the sum of every listed account EXCEPT the pool
+   * mirror. The key is unchanged but its meaning is not: it used to include
+   * the mirror, and because the ledger sums to zero that reduced to MINUS the
+   * sum of every customer wallet (one merchant holding 300.00 rendered
+   * `total: "-300.00"` under the heading "the house's own accounts", going
+   * further negative with every deposit an operator was glad to see).
+   */
   total: string;
+  /**
+   * The pool mirror's balance, or null when there is NO pool account at all.
+   *
+   * `null`, never the string "0.00": a missing mirror is a different fact
+   * from an empty one, and this endpoint never publishes a fabricated zero
+   * for money (dashboard/views/ledger.py:143-146). Render the null as
+   * `UNKNOWN_AMOUNT` plus the reason, never as a figure.
+   */
+  pool_mirror: string | null;
 }
 
 /** One tracked command's latest CommandRun row, or null if it has never
@@ -263,6 +302,25 @@ export interface CommandRunInfo {
   /** SOME-but-not-all of the run's work was unreadable; distinct from `ok`,
    *  which is reserved for a run that gained no information at all. */
   degraded: boolean;
+  /**
+   * THE THIRD STATE: the run COULD NOT RUN AT ALL -- another run held the
+   * poller's lock. Derived on the backend from an exact match against
+   * `CommandRun.SKIPPED_NOTE`, not from parsing `note`
+   * (dashboard/services/position.py:99-107).
+   *
+   * A skip is recorded `ok=false` (wallets/models.py:634-642: it gained no
+   * information about ingestion), so the four honest states are:
+   *   did the work   ok=true  degraded=false skipped=false
+   *   partial        ok=true  degraded=true  skipped=false
+   *   could not run  ok=false degraded=false skipped=true
+   *   dead           ok=false degraded=false skipped=false
+   * Only the last is red. Skips are ROUTINE against a 2-minute cron (a 120s
+   * statement timeout with --days 2 can take ~240s), so colouring them red
+   * would put a red alarm on the strip every other minute and get the strip
+   * tuned out -- which is how the 2026-09-16 blindness happens one level
+   * down.
+   */
+  skipped: boolean;
   note: string;
   age_seconds: number;
 }
@@ -304,7 +362,20 @@ export interface LedgerPosition {
   /** null only if CommandRun itself could not be read; see `last_runs_error`. */
   last_runs: Record<string, CommandRunInfo | null> | null;
   last_runs_error: string | null;
+  /**
+   * The unmatched-DEBIT queue's depth, or null when it could not be read.
+   * NEVER coerce the null to 0 for a severity check: `(unmatched_count ?? 0)
+   * > 0` is how an unread queue renders as an OK-coloured cell, which is the
+   * 2026-09-16 failure expressed as a colour instead of a digit.
+   */
   unmatched_count: number | null;
+  /**
+   * Why `unmatched_count` is null. `0` + `null` = read, and empty. `null` +
+   * a string = could not be read. It was a bare `except Exception: unmatched
+   * = None` with no sibling until the backend's own fix wave
+   * (dashboard/services/position.py:165-175).
+   */
+  unmatched_error: string | null;
   /** Never a fabricated 0 on a DB failure -- see `stuck_payouts_error`. */
   stuck_payouts: number | null;
   stuck_payouts_error: string | null;
@@ -315,7 +386,26 @@ export interface LedgerLeg {
   entry_id: string;
   account_id: string;
   account_kind: string;
+  /**
+   * The merchant behind this leg's account, or null -- AND NULL DOES NOT
+   * MEAN "HOUSE". `Employer.business_name` is `blank=True, null=True` and
+   * this database holds such rows, so a real merchant can arrive here with
+   * a null name. Read `is_house_account` for the house question, never this.
+   */
   business_name: string | null;
+  /**
+   * Whose money this account holds, decided on `account.wallet_id is None`
+   * (dashboard/views/ledger.py:225-238) -- NOT on the name, NOT on the kind.
+   *
+   *   true            -> always `business_name: null`. Daraja's own account.
+   *   false + string  -> a named merchant.
+   *   false + null    -> A MERCHANT WHOSE NAME IS NULL ON FILE. Merchant
+   *                      money. It must render as an UNNAMED MERCHANT and
+   *                      never as a house account: that misattribution is
+   *                      the one thing the screen built to attribute money
+   *                      correctly must not do.
+   */
+  is_house_account: boolean;
   /** Signed decimal string: negative debits the account. */
   amount: string;
 }
@@ -332,27 +422,31 @@ export interface LedgerKindsPayload {
   kinds: string[];
 }
 
-/**
- * GET /dashboard/ledger/accounts/<id>/entries/ -- one account's running
- * statement FROM THE LEDGER (Entry), distinct from the existing `EntryRow`
- * above, which is the legacy CollectionAccountTransaction mirror behind the
- * wallet statement screen. Named `LedgerEntryRow`, not `EntryRow`, because
- * `EntryRow` already exists for that other screen and redefining it would
- * either fail to compile or silently change its contract.
- */
-export interface LedgerEntryRow {
-  entry_id: string;
-  amount: string;
-  created: string;
-  movement_id: string;
-  movement_kind: string;
-  reference: string;
-}
+// WHAT IS DELIBERATELY NOT TYPED HERE, and the gap it records.
+//
+// `GET /dashboard/ledger/accounts/<id>/entries/` (the spec's account-first
+// running statement) and `GET /dashboard/deposits/rows/` (ingested statement
+// rows with their outcomes) both exist and are tested on the backend. NO
+// SCREEN CALLS EITHER, so the interfaces that described them -- a
+// `LedgerEntryRow` and a `StatementRowItem.outcome` -- have been deleted
+// rather than left standing.
+//
+// This is the ruling that deleted dashboard/serializers/ledger.py earlier in
+// this plan, applied to its mirror image: a shape that documents a response
+// nothing renders is a lie with a shelf life, because nothing fails when the
+// two disagree. The ledger screen's row click deep-links to
+// /daraja/ledger/movements?account_id=..., which is a FILTER OVER MOVEMENTS
+// -- every leg of every matching movement, including the other side's, with
+// no running balance for the account. That is not the account-first
+// statement, and this file must not imply a screen that does not exist.
+//
+// The endpoints stay. Typing them belongs with the screen that calls them.
 
-/** One row of the pooled account's Selcom statement -- shared shape behind
- *  GET /dashboard/deposits/rows/, /deposits/suspense/ (CREDITS attributed to
- *  nobody) and /deposits/unmatched-debits/ (DEBITS with no recorded payout;
- *  see `UnmatchedDebitsPayload`). */
+/** One row of the pooled account's Selcom statement -- the shared shape
+ *  behind GET /deposits/suspense/ (CREDITS attributed to nobody) and
+ *  /deposits/unmatched-debits/ (DEBITS with no recorded payout; see
+ *  `UnmatchedDebitsPayload`). The backend also emits `outcome` on these rows,
+ *  which no screen renders -- see the note above. */
 export interface StatementRowItem {
   transaction_id: string;
   direction: string;
@@ -362,7 +456,6 @@ export interface StatementRowItem {
   client_name: string;
   payment_type: string;
   bank_number: string;
-  outcome: string;
   movement_id: string | null;
   ingested: string;
 }

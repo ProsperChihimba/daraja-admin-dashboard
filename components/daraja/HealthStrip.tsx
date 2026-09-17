@@ -22,6 +22,15 @@
 //   - `ledger_total` is nullable too, with `ledger_error`: the ledger not
 //     summing to zero is worse than a breach, so it is its own failure
 //     state, not folded into the gap.
+//   - `unmatched_count` is nullable AND ITS NULL IS A WARNING. It used to be
+//     the one nullable field in the payload with no `*_error` sibling, and
+//     `queuesSeverity` computed `(unmatched_count ?? 0) > 0`, so the null
+//     collapsed into the not-warned branch: a failed read of the queue depth
+//     rendered "— unmatched" in an OK-coloured cell with no warning dot and
+//     no error text anywhere. An operator scanning five cells for colour saw
+//     an all-clear strip over a number nobody could read -- the 2026-09-16
+//     failure in a different costume. The backend now sends
+//     `unmatched_error` beside it; nothing here may coerce either away.
 "use client";
 
 import { formatOpsMoney } from "@/lib/darajaMoney";
@@ -80,22 +89,60 @@ function haltNote(position: LedgerPosition): string | undefined {
   return `${age(halt.age_seconds)} · ${halt.reason}${magnitude}`;
 }
 
+/** A count that could not be read shows a placeholder, never "0": a
+ *  fabricated zero is exactly how a full queue comes to look empty. */
 function queuesValue(position: LedgerPosition): string {
   return position.unmatched_count === null
     ? "— unmatched"
     : `${position.unmatched_count} unmatched`;
 }
 
+/**
+ * EVERY FACT THIS CELL HAS, INCLUDING THE ONES IT DOES NOT.
+ *
+ * This note used to report stuck payouts alone, so an unreadable
+ * `unmatched_count` rendered a dash with no explanation beside it. The
+ * binding rule is that a null renders as a placeholder plus ITS ERROR; a
+ * placeholder on its own is indistinguishable from an empty queue.
+ *
+ * The bare-null branch is kept beside the `unmatched_error` branch on
+ * purpose: a TypeScript type is a claim about a contract, not a guarantee
+ * about the bytes that arrive, and an older backend (or a rollback) still
+ * swallows this read to a bare null. Unknown must read as unknown either way.
+ */
 function queuesNote(position: LedgerPosition): string {
-  if (position.stuck_payouts_error) return `stuck payouts: ${position.stuck_payouts_error}`;
-  if (position.stuck_payouts === null) return "stuck payouts unknown";
-  return `${position.stuck_payouts} payout${position.stuck_payouts === 1 ? "" : "s"} stuck`;
+  const parts: string[] = [];
+
+  if (position.unmatched_error) {
+    parts.push(`unmatched debits unreadable: ${position.unmatched_error}`);
+  } else if (position.unmatched_count === null) {
+    parts.push("unmatched debit count unavailable");
+  }
+
+  if (position.stuck_payouts_error) {
+    parts.push(`stuck payouts: ${position.stuck_payouts_error}`);
+  } else if (position.stuck_payouts === null) {
+    parts.push("stuck payouts unknown");
+  } else {
+    parts.push(
+      `${position.stuck_payouts} payout${position.stuck_payouts === 1 ? "" : "s"} stuck`,
+    );
+  }
+
+  return parts.join(" · ");
 }
 
+/**
+ * NEVER `?? 0`. "Could not be read" is not "nothing to warn about", and the
+ * two used to collapse into the same branch here. An unread queue is
+ * UNKNOWN, and unknown is a warning on the one screen that exists to make
+ * an unknown visible.
+ */
 function queuesSeverity(position: LedgerPosition): Severity {
-  if (position.stuck_payouts_error) return "warn";
-  if ((position.stuck_payouts ?? 0) > 0) return "warn";
-  if ((position.unmatched_count ?? 0) > 0) return "warn";
+  if (position.unmatched_error || position.unmatched_count === null) return "warn";
+  if (position.stuck_payouts_error || position.stuck_payouts === null) return "warn";
+  if (position.stuck_payouts > 0) return "warn";
+  if (position.unmatched_count > 0) return "warn";
   return "ok";
 }
 

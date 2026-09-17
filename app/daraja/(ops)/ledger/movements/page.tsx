@@ -212,6 +212,7 @@ function MovementsList({ path }: { path: string }) {
  */
 export function MovementsExplorer({ initialAccountId = "" }: { initialAccountId?: string }) {
   const [kind, setKind] = React.useState("");
+  const [accountIdInput, setAccountIdInput] = React.useState(initialAccountId);
   const [accountId, setAccountId] = React.useState(initialAccountId);
   const [referenceInput, setReferenceInput] = React.useState("");
   const [reference, setReference] = React.useState("");
@@ -224,6 +225,18 @@ export function MovementsExplorer({ initialAccountId = "" }: { initialAccountId?
     const timer = setTimeout(() => setReference(referenceInput.trim()), 400);
     return () => clearTimeout(timer);
   }, [referenceInput]);
+
+  // The account-id box is the SAME shape and was not debounced: it drove
+  // `path` straight off its own state, so a 26-character account id pasted or
+  // typed here issued up to twenty-six requests -- and, with `key={path}`
+  // still on the list below, twenty-six full remounts, each throwing away the
+  // pages the last one had loaded. Same 400ms as the reference box ten lines
+  // up and as the merchants search; the two fields now behave identically,
+  // which is also what stops an operator concluding one of them is broken.
+  React.useEffect(() => {
+    const timer = setTimeout(() => setAccountId(accountIdInput.trim()), 400);
+    return () => clearTimeout(timer);
+  }, [accountIdInput]);
 
   const path = React.useMemo(
     () => movementsPath({ kind, reference, accountId, after: dates.after, before: dates.before }),
@@ -250,8 +263,8 @@ export function MovementsExplorer({ initialAccountId = "" }: { initialAccountId?
           placeholder="Account id"
           aria-label="Account id"
           className="max-w-xs"
-          value={accountId}
-          onChange={(e) => setAccountId(e.target.value)}
+          value={accountIdInput}
+          onChange={(e) => setAccountIdInput(e.target.value)}
         />
         <DateRangeFilter value={dates} onChange={setDates} />
       </div>

@@ -59,18 +59,44 @@ export function legDirection(amount: string | null | undefined): LegDirection {
 /**
  * What to call the account this leg touched.
  *
- * A NULL `business_name` IS NOT MISSING DATA. The backend fills it from
- * entry.account.wallet.employer (dashboard/views/ledger.py), so it is null for
- * every account that belongs to no merchant -- revenue, card top-ups, the Lipa
- * Namba wallet, the pool. Those are the house's own accounts, and they are the
- * other side of nearly every movement on this screen. Rendering them blank (or
- * "undefined", or "—") would make the commonest legs in the ledger look
- * broken, so they are named by their kind and identified by a short id.
+ * A NULL `business_name` USED TO MEAN "HOUSE ACCOUNT" HERE, AND THAT RULE WAS
+ * WRONG. `Employer.business_name` is `blank=True, null=True` and this database
+ * holds such rows, so a real merchant can arrive with a null name -- and this
+ * screen rendered them as one of Daraja's own accounts. On the one screen
+ * built to attribute money correctly, that is the worst thing it could say.
+ *
+ * The house question is now answered by `is_house_account`, which the backend
+ * derives from `account.wallet_id is None` (dashboard/views/ledger.py:238) --
+ * from whether there is a merchant behind the account at all, not from
+ * whether one has been named and not from the account's kind. Three cases:
+ *
+ *   is_house_account: true   -> Daraja's own money; named by kind and id,
+ *                               because rendering blank would make the
+ *                               commonest legs in the ledger look broken.
+ *   false + a name           -> that merchant.
+ *   false + null             -> A MERCHANT WITH NO NAME ON FILE. Merchant
+ *                               money, said so in words.
  */
 export function legAccountLabel(leg: LedgerLeg): string {
   const name = leg.business_name?.trim();
   if (name) return name;
-  return `${leg.account_kind} · ${leg.account_id.slice(0, 8)}`;
+  if (leg.is_house_account) {
+    return `${leg.account_kind} · ${leg.account_id.slice(0, 8)}`;
+  }
+  return `Unnamed merchant · ${leg.account_id.slice(0, 8)}`;
+}
+
+/**
+ * The short label beside the account name, or null when the name says it all.
+ *
+ * Stated explicitly rather than implied by a blank name: whose money a leg
+ * touched is a fact about the movement, not an absence. An unnamed merchant
+ * gets a label of its own precisely so it cannot be read as the house.
+ */
+export function legAccountBadge(leg: LedgerLeg): string | null {
+  if (leg.is_house_account) return "house account";
+  if (leg.business_name?.trim()) return null;
+  return "merchant — no name on file";
 }
 
 const DIRECTION_TEXT: Record<LegDirection, string> = {
@@ -86,17 +112,18 @@ const DIRECTION_TEXT: Record<LegDirection, string> = {
 function Leg({ leg }: { leg: LedgerLeg }) {
   const direction = legDirection(leg.amount);
   const amount = formatOpsMoney(leg.amount);
+  const badge = legAccountBadge(leg);
 
   return (
     <li className="flex items-baseline justify-between gap-4 py-1.5">
       <span className="flex min-w-0 items-baseline gap-2">
         <span className="truncate text-sm text-text">{legAccountLabel(leg)}</span>
-        {/* Stated explicitly rather than implied by a blank name: a leg with no
-            merchant behind it is the house's own money, which is a fact about
-            the movement, not an absence. */}
-        {leg.business_name === null ? (
+        {/* Keyed off `is_house_account`, NEVER off `business_name === null`,
+            which is what used to render a nameless merchant's money as
+            Daraja's own. See legAccountBadge. */}
+        {badge ? (
           <span className="shrink-0 text-[10px] uppercase tracking-wide text-text-faint">
-            house account
+            {badge}
           </span>
         ) : null}
       </span>
