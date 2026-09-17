@@ -208,3 +208,190 @@ export interface BranchRow {
 export interface PeoplePayload extends CursorPaged<EmployeeRow> {
   branches: BranchRow[];
 }
+
+// ---------------------------------------------------------------------------
+// Ledger, position, and deposits (GET /dashboard/ledger/*, /dashboard/deposits/*)
+//
+// Derived from dashboard/views/ledger.py, dashboard/services/position.py,
+// dashboard/views/deposits.py and dashboard/urls.py directly, NOT from the
+// Task 6 brief -- the brief predates the backend and drifted from it across
+// five task reviews. Known drift, corrected here:
+//   * `halt.gap` does not exist; it is `halt.gap_magnitude`, and it is
+//     UNSIGNED (LedgerHalt.gap is stored via abs() in reconcile.py).
+//   * the top-level `gap`'s sign flipped: POSITIVE now means the ledger
+//     claims more money than exists ("ledger_over"), matching the sign
+//     check_invariant() uses to decide whether to halt.
+//   * `last_runs[command]` gained `degraded: boolean` beside `ok`/`note`.
+//   * the position payload gained `halt_error`, `last_runs_error` and
+//     `stuck_payouts_error`, all nullable -- and `stuck_payouts` itself is
+//     therefore nullable too (never a fabricated 0 on a DB failure, the same
+//     rule `pool_balance`/`ledger_total` already follow).
+//   * `DepositIntentRow` gained `registered` (the view emits it; the brief's
+//     interface omitted it).
+//   * the paginated ledger/deposit list endpoints ride DashboardPagination,
+//     which is DRF CursorPagination -- `CursorPaged<T>` above, not
+//     `Paginated<T>` (no `count`). `UnmatchedDebitsPayload` is the one
+//     exception: that view builds its own `Response`, not a paginator.
+
+/** One non-wallet ledger account, or a wallet ops has designated for a
+ *  system purpose (Revenue, Card Top-ups, Lipa Namba) -- GET
+ *  /dashboard/ledger/accounts/. Customer wallets otherwise live on the
+ *  wallet screens, not here. */
+export interface OpsAccountRow {
+  account_id: string;
+  kind: string;
+  label: string;
+  /** Decimal string, summed from Entry -- never a number, never assume 2dp
+   *  universally (Entry is 20,2; a wallet-mirror balance elsewhere is 50,5,
+   *  and both are correct for their own column). */
+  balance: string;
+  wallet_account_id: string | null;
+  designation: string | null;
+}
+
+export interface OpsAccountsPayload {
+  accounts: OpsAccountRow[];
+  total: string;
+}
+
+/** One tracked command's latest CommandRun row, or null if it has never
+ *  run -- see `LedgerPosition.last_runs`. */
+export interface CommandRunInfo {
+  started: string;
+  finished: string | null;
+  ok: boolean;
+  /** SOME-but-not-all of the run's work was unreadable; distinct from `ok`,
+   *  which is reserved for a run that gained no information at all. */
+  degraded: boolean;
+  note: string;
+  age_seconds: number;
+}
+
+/** The active LedgerHalt, if any -- see `LedgerPosition.halt`. */
+export interface LedgerHaltInfo {
+  halt_id: string;
+  active: boolean;
+  reason: string;
+  /** UNSIGNED. Named `gap_magnitude`, never `gap`, so it cannot be confused
+   *  with the signed top-level `LedgerPosition.gap`. Nullable: LedgerHalt.gap
+   *  itself is nullable in the model. */
+  gap_magnitude: string | null;
+  raised: string;
+  age_seconds: number;
+}
+
+/** GET /dashboard/ledger/position/ -- ledger vs pool, halt, last runs.
+ *  NEVER RAISES on the backend: each component below carries its own
+ *  `*_error` sibling instead of blanking the whole response. */
+export interface LedgerPosition {
+  /** null when the local ledger could not be summed (corruption). */
+  ledger_total: string | null;
+  ledger_error: string | null;
+  /** null when the LIVE Selcom read failed. NEVER render this as 0. */
+  pool_balance: string | null;
+  pool_error: string | null;
+  /** A genuine zero pool -- shown, but flagged: it is the shape of a bad
+   *  read (the 2026-09-16 incident). */
+  pool_suspect: boolean;
+  /** Signed: ledger_total - pool_balance. POSITIVE means the ledger claims
+   *  MORE money than exists ("ledger_over", the halting direction);
+   *  negative means the pool holds more than the ledger claims
+   *  ("pool_over", harmless). null whenever either side above is null. */
+  gap: string | null;
+  direction: "balanced" | "ledger_over" | "pool_over" | "unknown";
+  halt: LedgerHaltInfo | null;
+  halt_error: string | null;
+  /** null only if CommandRun itself could not be read; see `last_runs_error`. */
+  last_runs: Record<string, CommandRunInfo | null> | null;
+  last_runs_error: string | null;
+  unmatched_count: number | null;
+  /** Never a fabricated 0 on a DB failure -- see `stuck_payouts_error`. */
+  stuck_payouts: number | null;
+  stuck_payouts_error: string | null;
+}
+
+/** One leg of a movement -- GET /dashboard/ledger/movements/. */
+export interface LedgerLeg {
+  entry_id: string;
+  account_id: string;
+  account_kind: string;
+  business_name: string | null;
+  /** Signed decimal string: negative debits the account. */
+  amount: string;
+}
+
+export interface MovementRow {
+  movement_id: string;
+  kind: string;
+  reference: string;
+  created: string;
+  legs: LedgerLeg[];
+}
+
+export interface LedgerKindsPayload {
+  kinds: string[];
+}
+
+/**
+ * GET /dashboard/ledger/accounts/<id>/entries/ -- one account's running
+ * statement FROM THE LEDGER (Entry), distinct from the existing `EntryRow`
+ * above, which is the legacy CollectionAccountTransaction mirror behind the
+ * wallet statement screen. Named `LedgerEntryRow`, not `EntryRow`, because
+ * `EntryRow` already exists for that other screen and redefining it would
+ * either fail to compile or silently change its contract.
+ */
+export interface LedgerEntryRow {
+  entry_id: string;
+  amount: string;
+  created: string;
+  movement_id: string;
+  movement_kind: string;
+  reference: string;
+}
+
+/** One row of the pooled account's Selcom statement -- shared shape behind
+ *  GET /dashboard/deposits/rows/, /deposits/suspense/ (CREDITS attributed to
+ *  nobody) and /deposits/unmatched-debits/ (DEBITS with no recorded payout;
+ *  see `UnmatchedDebitsPayload`). */
+export interface StatementRowItem {
+  transaction_id: string;
+  direction: string;
+  amount: string;
+  transaction_date: string;
+  details: string;
+  client_name: string;
+  payment_type: string;
+  bank_number: string;
+  outcome: string;
+  movement_id: string | null;
+  ingested: string;
+}
+
+/**
+ * GET /dashboard/deposits/unmatched-debits/ -- Selcom DEBITS that left the
+ * pool with no recorded payout behind them. NOT the credit-side suspense
+ * queue (unattributed money that arrived, at /deposits/suspense/, which
+ * pages as `CursorPaged<StatementRowItem>` like every other deposits list
+ * here). This one view builds its own `Response` rather than paginating, so
+ * its envelope is `{count, results}`, not `{next, previous, results}` --
+ * named `UnmatchedDebitsPayload`, not e.g. `UnmatchedCreditsPayload`, so an
+ * operator mid-incident cannot misread which side of the ledger it reports.
+ */
+export interface UnmatchedDebitsPayload {
+  count: number;
+  results: StatementRowItem[];
+}
+
+/** GET /dashboard/deposits/intents/ -- a merchant's declaration that money
+ *  is on its way. Confirmation/UX only; never the matching key. */
+export interface DepositIntentRow {
+  intent_id: string;
+  state: string;
+  amount: string;
+  description: string;
+  source_account_number: string;
+  wallet_account_id: string;
+  business_name: string | null;
+  statement_row_id: string | null;
+  registered: string;
+}

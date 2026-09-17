@@ -6,6 +6,9 @@ import {
   Activity,
   ScrollText,
   Users,
+  Wallet,
+  BookOpen,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 
@@ -43,7 +46,12 @@ export const darajaSidebarConfig: NavGroup[] = [
   {
     id: "daraja",
     label: "Daraja Ops",
-    items: [{ label: "Merchants", href: "/daraja/merchants", icon: Users }],
+    items: [
+      { label: "Merchants", href: "/daraja/merchants", icon: Users },
+      { label: "Ledger", href: "/daraja/ledger", icon: Wallet },
+      { label: "Movements", href: "/daraja/ledger/movements", icon: BookOpen },
+      { label: "Deposits", href: "/daraja/deposits", icon: Inbox },
+    ],
   },
 ];
 
