@@ -9,12 +9,15 @@
 // session and renders the shared shell around it.
 "use client";
 import * as React from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { ErrorState, LoadingBlock } from "@/components/common/PageStates";
+import { DangerousActionModal } from "@/components/common/DangerousActionModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status_badge";
+import { Button } from "@/components/ui/button";
 import { ActivityTab } from "@/components/daraja/ActivityTab";
 import { ExpensesTab } from "@/components/daraja/ExpensesTab";
 import { WalletTab } from "@/components/daraja/WalletTab";
@@ -24,8 +27,125 @@ import { KycTab } from "@/components/daraja/KycTab";
 import { formatDate } from "@/lib/format";
 import { formatOpsMoney } from "@/lib/darajaMoney";
 import { useDarajaResource } from "@/lib/darajaAuth";
+import {
+  createActionRequest,
+  extractOpsErrorMessage,
+  getActionCatalogue,
+  type ActionCatalogueEntry,
+} from "@/lib/darajaActions";
 import { kycLabel, kycVariant } from "@/lib/kyc";
 import type { MerchantDetail } from "@/types/daraja";
+
+/**
+ * Activate/Suspend used to be direct-executing buttons ("Merchant
+ * activated", toast, done) on the Ankara equivalent
+ * (components/org/SuspendActivateDialog.tsx) -- the exact pattern this
+ * plan's dual-approval control exists to remove for money actions. Neither
+ * button here calls an execute endpoint. Both only ever POST
+ * /dashboard/actions/requests/, which -- per dashboard/views/actions.py's
+ * own docstring -- "does NOT execute": it stores a row a DIFFERENT
+ * ops.admin must separately approve within the hour
+ * (dashboard/views/actions.py REQUEST_TTL). The copy below says exactly
+ * that, on purpose, every time.
+ */
+function MerchantLifecycleActions({
+  merchant,
+  onRequested,
+}: {
+  merchant: MerchantDetail;
+  onRequested: (message: string) => void;
+}) {
+  const [catalogue, setCatalogue] = React.useState<ActionCatalogueEntry[] | null>(null);
+  const [open, setOpen] = React.useState<"activate" | "suspend" | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    // "So the UI never renders a button that would 403" -- ActionCatalogue's
+    // own docstring. `may_request` is computed with the same _may() the
+    // create endpoint checks, so a button hidden here truly could not be
+    // used, and one shown here truly can be tried.
+    getActionCatalogue()
+      .then((rows) => { if (!cancelled) setCatalogue(rows); })
+      .catch(() => { if (!cancelled) setCatalogue([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const may = (actionType: string) =>
+    catalogue?.some((c) => c.action_type === actionType && c.may_request) ?? false;
+
+  async function submit(actionType: string, reason: string) {
+    try {
+      await createActionRequest({
+        action_type: actionType,
+        target_ref: merchant.employer_id,
+        reason,
+      });
+      onRequested(
+        `Request created. Nothing has happened yet -- ${
+          merchant.business_name || "this merchant"
+        } is still ${merchant.active ? "active" : "inactive"}. A different ops.admin `
+        + `must approve it from the Actions queue within the hour, or it expires `
+        + `and nothing happens at all.`,
+      );
+      setError(null);
+    } catch (e) {
+      setError(extractOpsErrorMessage(e, "Could not create the request."));
+      throw e; // keeps the modal open so the error is visible
+    }
+  }
+
+  if (catalogue === null) return null; // don't flash a button that might 403
+
+  return (
+    <>
+      {!merchant.active && may("employer.approve") ? (
+        <Button size="sm" onClick={() => setOpen("activate")}>Activate</Button>
+      ) : null}
+      {merchant.active && may("employer.suspend") ? (
+        <Button size="sm" variant="destructive" onClick={() => setOpen("suspend")}>
+          Suspend
+        </Button>
+      ) : null}
+
+      {error ? <p className="text-xs text-danger-fg">{error}</p> : null}
+
+      <DangerousActionModal
+        open={open === "activate"}
+        onOpenChange={(o) => setOpen(o ? "activate" : null)}
+        title={`Request: activate ${merchant.business_name || merchant.employer_id}`}
+        impact={
+          <>
+            This only CREATES a request -- it does not activate the merchant.
+            A different ops.admin must review and approve it (from the Actions
+            queue) within one hour, or it expires and nothing happens.
+          </>
+        }
+        confirmLabel="Create request"
+        requireReason
+        onConfirm={(reason) => submit("employer.approve", reason)}
+      />
+      <DangerousActionModal
+        open={open === "suspend"}
+        onOpenChange={(o) => setOpen(o ? "suspend" : null)}
+        title={`Request: suspend ${merchant.business_name || merchant.employer_id}`}
+        impact={
+          <>
+            This only CREATES a request -- it does not suspend the merchant.
+            A different ops.admin must review and approve it (from the Actions
+            queue) within one hour, or it expires and nothing happens. Once
+            approved, new payouts, expenses and card loads stop; anything
+            already dispatched is not stopped and the wallet balance is
+            untouched.
+          </>
+        }
+        confirmLabel="Create request"
+        requireReason
+        onConfirm={(reason) => submit("employer.suspend", reason)}
+      />
+    </>
+  );
+}
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -48,6 +168,7 @@ export default function MerchantDetailPage() {
   const { data: m, loading, error, refetch } = useDarajaResource<MerchantDetail>(
     `/employers/${id}/`,
   );
+  const [requestedMessage, setRequestedMessage] = React.useState<string | null>(null);
 
   if (error) {
     return (
@@ -80,9 +201,21 @@ export default function MerchantDetailPage() {
             <StatusBadge variant={kycVariant(m.kyc_status)}>
               {kycLabel(m.kyc_status)}
             </StatusBadge>
+            <MerchantLifecycleActions merchant={m} onRequested={setRequestedMessage} />
           </div>
         }
       />
+
+      {requestedMessage ? (
+        <Card className="mb-4 border border-brand">
+          <CardContent className="flex items-start justify-between gap-4 text-sm">
+            <p>{requestedMessage} See the <Link href="/daraja/actions" className="underline">Actions queue</Link>.</p>
+            <Button size="sm" variant="outline" onClick={() => setRequestedMessage(null)}>
+              Dismiss
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {m.wallet === null ? (
         // `wallet` is the first-opened ACTIVE CollectionAccount, so null here

@@ -35,6 +35,7 @@ import { darajaSidebarConfig } from "@/config/sidebar";
 import { LoadingBlock } from "@/components/common/PageStates";
 import { getOpsAccess } from "@/lib/darajaApi";
 import { darajaLogout, darajaMe } from "@/lib/darajaAuth";
+import { listActionRequests } from "@/lib/darajaActions";
 import type { DarajaAdminUser } from "@/types/daraja";
 
 function displayName(user: DarajaAdminUser): string {
@@ -42,9 +43,19 @@ function displayName(user: DarajaAdminUser): string {
   return full || user.phone || user.email || "Admin";
 }
 
+// How often the pending-actions badge re-polls. There is no server-side
+// "how many are pending" aggregate (ActionRequests.get takes no state
+// filter), so this reads one page of the queue (page_size at the
+// paginator's own max -- DashboardPageNumberPagination.max_page_size=200)
+// and counts PENDING, non-expired rows itself. Good enough for a nav badge;
+// if pending requests ever exceed 200 at once this undercounts, which is a
+// symptom worth noticing on its own.
+const PENDING_POLL_MS = 30_000;
+
 export default function DarajaOpsLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = React.useState<DarajaAdminUser | null>(null);
+  const [pendingCount, setPendingCount] = React.useState(0);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -74,13 +85,41 @@ export default function DarajaOpsLayout({ children }: { children: React.ReactNod
     };
   }, [router]);
 
+  React.useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    async function poll() {
+      try {
+        const page = await listActionRequests({ page: 1, page_size: 200 });
+        if (cancelled) return;
+        const pending = page.results.filter((r) => r.state === "pending" && !r.expired).length;
+        setPendingCount(pending);
+      } catch {
+        // A badge that can't refresh stays at its last known value rather
+        // than flashing an error in the nav -- the Actions screen itself
+        // reports any real failure to load the queue.
+      }
+    }
+
+    void poll();
+    const id = setInterval(poll, PENDING_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [user]);
+
   // Nothing renders until the check resolves, so a protected screen never
   // flashes before the redirect fires.
   if (!user) return <LoadingBlock />;
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <AppSidebar groups={darajaSidebarConfig} />
+      <AppSidebar
+        groups={darajaSidebarConfig}
+        badges={{ "/daraja/actions": pendingCount }}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar onLogout={darajaLogout} displayName={displayName(user)} showSearch={false} />
         <main className="min-w-0 flex-1 p-6">{children}</main>

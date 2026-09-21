@@ -22,11 +22,19 @@ function isActive(pathname: string, href: string) {
  * System and Audit Log, every one of which bounces through RequireAuth to
  * Ankara's /login (whole-branch review, I4). The Daraja layout passes
  * `darajaSidebarConfig`.
+ *
+ * `badges` is the same shape of additive prop: href -> a count to show next
+ * to that item, DEFAULTING TO `{}` so every existing caller (this file's own
+ * default export used bare, everywhere in app/(app)/) renders unchanged. The
+ * Daraja layout is the only caller that passes one today, keyed on
+ * `/daraja/actions` -- the pending money-action count.
  */
 export default function AppSidebar({
   groups = sidebarConfig,
+  badges = {},
 }: {
   groups?: NavGroup[];
+  badges?: Record<string, number>;
 }) {
   const pathname = usePathname();
 
@@ -46,6 +54,7 @@ export default function AppSidebar({
               {group.items.map((item) => {
                 const active = isActive(pathname, item.href);
                 const Icon = item.icon;
+                const count = badges[item.href];
                 return (
                   <Link
                     key={item.href}
@@ -58,7 +67,12 @@ export default function AppSidebar({
                     )}
                   >
                     <Icon className="size-4 shrink-0" />
-                    <span>{item.label}</span>
+                    <span className="flex-1">{item.label}</span>
+                    {count ? (
+                      <span className="rounded-pill bg-warning-bg px-2 py-0.5 text-[11px] font-semibold text-warning-fg">
+                        {count}
+                      </span>
+                    ) : null}
                   </Link>
                 );
               })}

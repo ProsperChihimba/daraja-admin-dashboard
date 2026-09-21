@@ -9,6 +9,7 @@ import {
   Wallet,
   BookOpen,
   Inbox,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -48,6 +49,7 @@ export const darajaSidebarConfig: NavGroup[] = [
     label: "Daraja Ops",
     items: [
       { label: "Merchants", href: "/daraja/merchants", icon: Users },
+      { label: "Actions", href: "/daraja/actions", icon: ShieldCheck },
       { label: "Ledger", href: "/daraja/ledger", icon: Wallet },
       { label: "Movements", href: "/daraja/ledger/movements", icon: BookOpen },
       { label: "Deposits", href: "/daraja/deposits", icon: Inbox },
