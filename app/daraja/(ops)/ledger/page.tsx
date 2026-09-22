@@ -186,48 +186,116 @@ export default function LedgerPage() {
   );
 }
 
+// A JUDGEMENT, NOT A MEASUREMENT. How long `last_ok_age_seconds` may grow
+// with no successful run before the strip stops calling a command healthy,
+// even while ticks (including skips) keep arriving on schedule. One pair of
+// numbers applied uniformly across every tracked command rather than a
+// threshold per cadence (reconcile_wallets/check_alerts poll every 2
+// minutes, reconcile_lipa every 5, poll_deposits on its own schedule):
+// amber is generous enough that a couple of missed ticks on the slowest of
+// them is not itself an alarm, red is the point past which "the poller is
+// ticking but not working" is no longer a maybe.
+const LAST_OK_AGE = {
+  amberAfterSeconds: 15 * 60,
+  redAfterSeconds: 60 * 60,
+} as const;
+
+type RunSeverity = "success" | "warning" | "danger";
+const SEVERITY_RANK: Record<RunSeverity, number> = {
+  success: 0,
+  warning: 1,
+  danger: 2,
+};
+
+/** The four tick states, unchanged from before this task -- see the big
+ *  comment on `lastRunState` below for how they combine with staleness. */
+function tickState(run: CommandRunInfo): { variant: RunSeverity; label: string } {
+  if (run.skipped) return { variant: "warning", label: "skipped" };
+  if (!run.ok) return { variant: "danger", label: "failed" };
+  if (run.degraded) return { variant: "warning", label: "degraded" };
+  return { variant: "success", label: "ok" };
+}
+
+/** `null` when the tick age is not stale enough to say anything about it. */
+function stalenessState(
+  run: CommandRunInfo,
+): { variant: RunSeverity; label: string } | null {
+  // THE CLOSED HONEST LIMIT. No successful run is on record at all -- not
+  // "unknown", worse than any threshold below, and must never be allowed to
+  // read as the green "ok" tick state alone would otherwise show. The same
+  // rule this payload already applies to `pool_balance`/`ledger_total`: a
+  // missing number is not an all-clear.
+  if (run.last_ok_age_seconds === null) {
+    return { variant: "warning", label: "no successful run" };
+  }
+  if (run.last_ok_age_seconds > LAST_OK_AGE.redAfterSeconds) {
+    return { variant: "danger", label: "stale" };
+  }
+  if (run.last_ok_age_seconds > LAST_OK_AGE.amberAfterSeconds) {
+    return { variant: "warning", label: "stale" };
+  }
+  return null;
+}
+
 /**
- * THE COLOUR RULE FOR `last_runs`, and the third state that changed it.
+ * THE COLOUR RULE FOR `last_runs`, and the honest limit that used to be
+ * recorded here as open.
  *
  * `ok`/`degraded` could say "did the work" and "did some of it"; neither
  * could say "could not run at all", which is what a lock-skipped tick is --
  * and what a WEDGED poller writes every two minutes. `skipped` is that third
  * fact, derived on the backend from an exact match against the writer's own
  * `CommandRun.SKIPPED_NOTE` constant, never from parsing `note`. Four honest
- * states:
+ * TICK states (`tickState` above):
  *
  *   did the work   ok=true  degraded=false skipped=false  -> green  "ok"
  *   partial        ok=true  degraded=true  skipped=false  -> amber  "degraded"
  *   could not run  ok=false degraded=false skipped=true   -> amber  "skipped"
  *   dead           ok=false degraded=false skipped=false  -> red    "failed"
  *
- * RED IS RESERVED FOR `ok === false && skipped === false`, and `skipped` is
- * checked FIRST. A skip now sets `ok=false` on the backend (it gained no
- * information about ingestion, which is what `ok=false` means there), so the
- * old `!run.ok ? "danger"` would paint a red alarm on this strip every other
- * minute: skips are routine against a 2-minute cron when a 120s statement
- * timeout with --days 2 can take ~240s. A strip that is red every other
- * minute gets tuned out, and a strip that is tuned out is the 2026-09-16
- * blindness one level down. A wedged poller is meant to surface as the
- * STALENESS of the last non-skipped run instead -- see the honest limit
- * recorded on the cell below. `note` carries detail no boolean can express
- * (e.g. "unreadable=2/7") and is always rendered when present.
+ * Among those four, red is reserved for `ok === false && skipped === false`,
+ * checked FIRST against skipped. A skip sets `ok=false` on the backend (it
+ * gained no information about ingestion), so the naive `!run.ok ? "danger"`
+ * would paint a red alarm on this strip every other minute: skips are
+ * routine against a 2-minute cron when a 120s statement timeout with --days
+ * 2 can take ~240s. A strip that is red every other minute gets tuned out,
+ * and a strip that is tuned out is the 2026-09-16 blindness one level down.
+ *
+ * THE HOLE THIS USED TO LEAVE OPEN: the payload carries only the LATEST run
+ * per command, so a WEDGED poller -- one that keeps starting and keeps
+ * failing to get the lock -- writes a fresh skip every two minutes forever.
+ * The tick table alone reads that as "skipped", amber, seconds old, on
+ * every load, with nothing distinguishing a five-minute wedge from a
+ * five-hour one. This comment used to record that as an honest limit the
+ * backend had not closed. IT NOW HAS: `last_ok_age_seconds` is the age of
+ * the newest run that actually did the work, computed on the backend the
+ * same way `age_seconds` is (see `CommandRunInfo.last_ok_age_seconds`).
+ * `stalenessState` above turns that number into a second, independent
+ * severity -- amber past 15 minutes with no successful run, red past 60 --
+ * and `lastRunState` returns the WORSE of the tick state and the staleness
+ * state (by `SEVERITY_RANK`, ties keeping the tick's more specific label).
+ * That is the whole point: a poller skipping every two minutes on schedule
+ * must stop looking healthy once the gap since its last real success
+ * crosses the line, even while ticks keep arriving.
+ *
+ * `note` carries detail no boolean can express (e.g. "unreadable=2/7") and
+ * is always rendered when present.
  *
  * `last_runs` itself is nullable (its own CommandRun read can fail
  * independently of everything else in the position payload) and is not
  * rendered as an empty strip when it is -- `last_runs_error` explains why.
  *
- * Exported, with `lastRunState` beside it, so the four states can be driven
- * and asserted against the real component rather than a copy of it.
+ * Exported, with `lastRunState` beside it, so the states can be driven and
+ * asserted against the real component rather than a copy of it.
  */
 export function lastRunState(run: CommandRunInfo): {
   variant: StatusVariant;
   label: string;
 } {
-  if (run.skipped) return { variant: "warning", label: "skipped" };
-  if (!run.ok) return { variant: "danger", label: "failed" };
-  if (run.degraded) return { variant: "warning", label: "degraded" };
-  return { variant: "success", label: "ok" };
+  const tick = tickState(run);
+  const stale = stalenessState(run);
+  if (stale === null) return tick;
+  return SEVERITY_RANK[stale.variant] > SEVERITY_RANK[tick.variant] ? stale : tick;
 }
 
 export function LastRuns({ position }: { position: LedgerPosition }) {
@@ -269,20 +337,31 @@ function LastRunCell({ command, run }: { command: string; run: CommandRunInfo | 
         <span className="text-xs font-medium text-text-muted">{command}</span>
         <StatusBadge variant={variant}>{label}</StatusBadge>
       </div>
-      <div className="mt-1 text-xs text-text-muted">{age(run.age_seconds)}</div>
-      {/* AN HONEST LIMIT, WRITTEN ON THE CELL. The payload carries only the
-          LATEST run per command, so when that run was skipped the age above
-          is the skip's -- freshly written, small, and saying nothing about
-          when a deposit was last ingested. A poller wedged while holding the
-          lock produces exactly this: a young amber cell, every two minutes,
-          forever. The strip cannot show the age of the last non-skipped run
-          because the backend does not send it; it can at least refuse to let
-          this age be read as one. */}
+      {/* THE PRIMARY AGE IS NOW THE WORKING AGE, not the newest tick's. The
+          old cell here could only show `age_seconds` -- the newest run of
+          any kind -- with a disclaimer that a wedged poller makes that
+          number meaningless (see the colour-rule comment above
+          `lastRunState`). The backend now sends the age of the last run
+          that actually did the work, so that is what leads; `null` reads as
+          words, never as "0s ago", since a missing number is not "just
+          happened". */}
+      <div className="mt-1 text-xs text-text-muted">
+        {run.last_ok_age_seconds === null
+          ? "no successful run on record"
+          : `${age(run.last_ok_age_seconds)} since last success`}
+      </div>
+      {/* The raw last-tick time is kept, smaller -- what the poller is doing
+          RIGHT NOW (including a skip) is still a useful, different fact from
+          when it last did the work. */}
+      <div className="mt-0.5 text-[11px] text-text-faint" title={run.started}>
+        last tick {age(run.age_seconds)}
+      </div>
       {run.skipped ? (
         <div className="mt-1 text-xs text-text-muted">
-          Could not run — another run held the lock. The age above is this
-          skip&rsquo;s, not a successful run&rsquo;s, and nothing was ingested.
-          Repeated skips mean a wedged run, not a healthy one.
+          Could not run — another run held the lock. Nothing was ingested by
+          this tick; repeated skips mean a wedged run, not a healthy one, and
+          the age above (not this tick) is what turns amber and then red if
+          it keeps happening.
         </div>
       ) : null}
       {run.note ? <div className="mt-1 text-xs text-text-muted">{run.note}</div> : null}

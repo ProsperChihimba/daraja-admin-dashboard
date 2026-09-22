@@ -323,6 +323,29 @@ export interface CommandRunInfo {
   skipped: boolean;
   note: string;
   age_seconds: number;
+  /**
+   * THE WEDGE NUMBER. `age_seconds` above is "since the newest run of any
+   * kind" -- a WEDGED poller that keeps starting and keeps failing to get
+   * the lock writes a fresh skip every two minutes forever, so `age_seconds`
+   * alone never reads as more than a couple of minutes old no matter how
+   * long ingestion has actually been dead. `last_ok_at` is the `finished`
+   * (or `started`) of the newest run that actually did the work -- `ok=true`
+   * AND not `skipped` (a `degraded` run counts: it is `ok=true` by
+   * definition, and partial success is information gained, not a failure to
+   * run) -- computed on the backend the same way `started`/`finished` are
+   * (dashboard/services/position.py::_last_runs). `null` when no such run
+   * exists at all.
+   */
+  last_ok_at: string | null;
+  /**
+   * Seconds since `last_ok_at`, or `null` alongside it. `null` here is NOT
+   * "just succeeded" -- it means no successful run is on record at all, and
+   * must never be coerced to 0 or read as fresh, the same rule this payload
+   * already applies to `pool_balance`/`ledger_total` when they cannot be
+   * read. See `lastRunState` below for how this turns into the strip's
+   * colour.
+   */
+  last_ok_age_seconds: number | null;
 }
 
 /** The active LedgerHalt, if any -- see `LedgerPosition.halt`. */
