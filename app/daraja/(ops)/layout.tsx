@@ -33,9 +33,10 @@ import AppSidebar from "@/components/shell/AppSidebar";
 import Topbar from "@/components/shell/Topbar";
 import { darajaSidebarConfig } from "@/config/sidebar";
 import { LoadingBlock } from "@/components/common/PageStates";
-import { getOpsAccess } from "@/lib/darajaApi";
+import darajaApi, { getOpsAccess } from "@/lib/darajaApi";
 import { darajaLogout, darajaMe } from "@/lib/darajaAuth";
 import { listActionRequests } from "@/lib/darajaActions";
+import type { AlertsPage } from "@/lib/darajaAlerts";
 import type { DarajaAdminUser } from "@/types/daraja";
 
 function displayName(user: DarajaAdminUser): string {
@@ -56,6 +57,7 @@ export default function DarajaOpsLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const [user, setUser] = React.useState<DarajaAdminUser | null>(null);
   const [pendingCount, setPendingCount] = React.useState(0);
+  const [openAlerts, setOpenAlerts] = React.useState(0);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -110,6 +112,33 @@ export default function DarajaOpsLayout({ children }: { children: React.ReactNod
     };
   }, [user]);
 
+  // Same polling shape as the pending-actions badge above, for the open-alert
+  // count. `open_count` rides alongside the ordinary paginator fields on
+  // every /alerts/ response (dashboard/views/alerts.py), so page_size=1 is
+  // enough -- this never reads `results`.
+  React.useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    async function poll() {
+      try {
+        const { data } = await darajaApi.get<AlertsPage>("/alerts/", {
+          params: { page_size: 1 },
+        });
+        if (!cancelled) setOpenAlerts(data.open_count ?? 0);
+      } catch {
+        // A badge that throws must not take the shell down with it.
+      }
+    }
+
+    void poll();
+    const id = setInterval(poll, PENDING_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [user]);
+
   // Nothing renders until the check resolves, so a protected screen never
   // flashes before the redirect fires.
   if (!user) return <LoadingBlock />;
@@ -118,7 +147,7 @@ export default function DarajaOpsLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen bg-bg">
       <AppSidebar
         groups={darajaSidebarConfig}
-        badges={{ "/daraja/actions": pendingCount }}
+        badges={{ "/daraja/actions": pendingCount, "/daraja/alerts": openAlerts }}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar onLogout={darajaLogout} displayName={displayName(user)} showSearch={false} />
