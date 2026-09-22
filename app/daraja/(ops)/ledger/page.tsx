@@ -105,14 +105,23 @@ export default function LedgerPage() {
            this is a button and a timestamp rather than a poll. Both GETs are
            refetched together: they are independent requests but one reading
            of the house's position, and refreshing half of it would put two
-           moments on one screen. */
+           moments on one screen.
+
+           `refetchPosition({ live: "1" })` -- NOT a bare `refetchPosition()`
+           -- is the ONE place on this screen that asks for a live Selcom
+           read (C2). The mount-time load above requests
+           `/ledger/position/` with no `live` param, which reads the stored
+           PoolReading instead of calling Selcom; only this button's click
+           should make the live call, on an account that has been throttling
+           since 2026-09-17. `refetchAccounts()` has no live/stale concept of
+           its own and keeps its ordinary call. */
         actions={
           <RefreshControl
             label="Position"
             fetchedAt={positionFetchedAt}
             busy={positionLoading || accountsLoading}
             onRefresh={() => {
-              void refetchPosition();
+              void refetchPosition({ live: "1" });
               void refetchAccounts();
             }}
           />

@@ -12,6 +12,14 @@
 //   - `pool_suspect` means Selcom genuinely returned zero: the number IS
 //     shown (it's real), but flagged, because a real zero and a bad read
 //     render identically otherwise.
+//   - `pool_balance` is a STORED reading by default (C2): the ordinary page
+//     load never calls Selcom, it reads what `reconcile_wallets` already
+//     measured up to two minutes ago. `pool_age_seconds`/`pool_measured_at`
+//     say how old it is, and `pool_stale` (older than five minutes, or no
+//     reading at all) is surfaced visibly -- an old number shown with no age
+//     beside it is the 2026-09-16 failure with the clock changed instead of
+//     the value. `?live=1` (the Refresh button) is the one path that still
+//     calls Selcom, in which case the age is 0 and `pool_stale` is false.
 //   - `gap` is null whenever either side is unknown, and is never computed
 //     or guessed at here -- the backend is the only thing that gets to
 //     decide the two sides are comparable.
@@ -62,6 +70,44 @@ export function age(seconds: number | null | undefined): string {
   if (seconds < 90) return `${Math.round(seconds)}s ago`;
   if (seconds < 5400) return `${Math.round(seconds / 60)}m ago`;
   return `${Math.round(seconds / 3600)}h ago`;
+}
+
+/**
+ * EVERY FACT THE POOL FIGURE CARRIES, INCLUDING ITS AGE.
+ *
+ * `pool_error` wins outright: a failed read (no reading recorded yet, or a
+ * failed `?live=1` call) explains the dash and there is nothing else to add.
+ * Otherwise this is built from the parts that exist -- "measured 40s ago"
+ * via the same `age()` clock every other cell uses (server-computed, does
+ * not count up in the browser), then STALE when the reading has missed at
+ * least two reconcile ticks, then the suspect-zero note. Order matters:
+ * staleness is a fact about the AGE and belongs right after it, before the
+ * separate question of whether the value itself looks suspicious.
+ */
+function poolNote(position: LedgerPosition): string | undefined {
+  if (position.pool_error) return position.pool_error;
+  const parts: string[] = [];
+  if (position.pool_measured_at !== null) {
+    parts.push(`measured ${age(position.pool_age_seconds)}`);
+  }
+  if (position.pool_stale) {
+    parts.push("STALE — reconciler may have missed a tick, verify before acting");
+  }
+  if (position.pool_suspect) {
+    parts.push("Selcom reports zero — verify before acting");
+  }
+  return parts.length > 0 ? parts.join(" · ") : undefined;
+}
+
+/** `bad` only for an unreadable pool -- the same failure `formatOpsMoney`
+ *  turns into a dash. Staleness and a suspect zero are both `warn`: the
+ *  number is real, but an operator should look before acting on it. Never
+ *  folded into a single boolean -- both reasons render in `poolNote` even
+ *  when only one of them fires this severity. */
+function poolSeverity(position: LedgerPosition): Severity {
+  if (position.pool_error) return "bad";
+  if (position.pool_stale || position.pool_suspect) return "warn";
+  return "ok";
 }
 
 function gapNote(position: LedgerPosition): string {
@@ -158,17 +204,17 @@ export function HealthStrip({ position }: { position: LedgerPosition }) {
         severity={position.ledger_error !== null ? "bad" : "ok"}
       />
       <Cell
-        label="Pool (live)"
+        /* NOT "Pool (live)" any more -- as of C2 the ordinary load reads a
+         * STORED measurement, not a live one. Calling it "live" here would
+         * be exactly the kind of unlabelled staleness this endpoint exists
+         * to rule out; the age in `poolNote` is what tells the truth about
+         * how fresh the figure is instead. */
+        label="Pool"
         value={formatOpsMoney(position.pool_balance)}
         /* A failed read shows the reason, never a number: formatOpsMoney(null)
          * is UNKNOWN_AMOUNT, never "TZS 0". */
-        note={
-          position.pool_error ??
-          (position.pool_suspect ? "Selcom reports zero — verify before acting" : undefined)
-        }
-        severity={
-          position.pool_error !== null ? "bad" : position.pool_suspect ? "warn" : "ok"
-        }
+        note={poolNote(position)}
+        severity={poolSeverity(position)}
       />
       <Cell
         label="Gap"

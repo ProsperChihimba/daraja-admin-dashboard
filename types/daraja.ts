@@ -345,12 +345,49 @@ export interface LedgerPosition {
   /** null when the local ledger could not be summed (corruption). */
   ledger_total: string | null;
   ledger_error: string | null;
-  /** null when the LIVE Selcom read failed. NEVER render this as 0. */
+  /**
+   * NULL either when nothing has ever been measured yet, or (on `?live=1`
+   * only) when the live Selcom read itself failed. NEVER render this as 0.
+   *
+   * DEFAULT LOAD (`GET /ledger/position/`, no `live` param) DOES NOT CALL
+   * SELCOM AT ALL as of C2 -- it reads the pool measurement
+   * `reconcile_wallets` already takes every two minutes
+   * (wallets.models.PoolReading), on an account that has been answering 403
+   * "excessive lookup usage" since 2026-09-17. `?live=1` -- the Refresh
+   * button only -- makes the live call and records what it measures too.
+   * See `pool_measured_at`/`pool_age_seconds`/`pool_stale` below: this
+   * number always carries its own age, and a stored reading must never be
+   * shown as if it were fresh -- the same reasoning that keeps this field
+   * null instead of a fabricated 0.
+   */
   pool_balance: string | null;
   pool_error: string | null;
   /** A genuine zero pool -- shown, but flagged: it is the shape of a bad
    *  read (the 2026-09-16 incident). */
   pool_suspect: boolean;
+  /**
+   * When `pool_balance` was actually measured -- an ISO timestamp, or null
+   * when there is no reading at all. Never derive "now" from the absence of
+   * this field; render it (via `pool_age_seconds`) or say it is unknown.
+   */
+  pool_measured_at: string | null;
+  /**
+   * How old `pool_balance` is, in whole seconds, computed on the SERVER the
+   * same way every other `age_seconds` on this payload is (see
+   * `CommandRunInfo.age_seconds`) -- it does not count up on its own once it
+   * reaches the browser. 0 on a fresh `?live=1` read; null alongside a null
+   * `pool_balance`.
+   */
+  pool_age_seconds: number | null;
+  /**
+   * True when the newest reading is older than five minutes (the
+   * reconciler runs every two, so this means at least two missed ticks) or
+   * when there is no reading at all. MUST be shown next to the figure,
+   * never silently: an old number displayed as if it were fresh is what let
+   * the 2026-09-16 bad pool read stand for seventeen hours, and the same
+   * risk applies to a stale reading displayed with no age beside it.
+   */
+  pool_stale: boolean;
   /** Signed: ledger_total - pool_balance. POSITIVE means the ledger claims
    *  MORE money than exists ("ledger_over", the halting direction);
    *  negative means the pool holds more than the ledger claims

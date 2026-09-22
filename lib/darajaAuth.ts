@@ -125,7 +125,22 @@ export function useDarajaResource<T>(
   const [error, setError] = useState<string | null>(null);
   const key = darajaDataKey(path, params);
   const sequence = useRef(0);
-  const refetch = useCallback(async () => {
+  /**
+   * `overrideParams`, when passed, is sent INSTEAD OF the params this hook
+   * was created with -- for a single call only, not a change to what the
+   * hook polls or re-mounts with. Added for the ledger health strip's
+   * Refresh button (app/daraja/(ops)/ledger/page.tsx): the ordinary load
+   * must ask `GET /ledger/position/` with no `live` param, and the Refresh
+   * button alone must ask `?live=1`, so the button cannot simply call
+   * `refetch()` -- that would resend whatever params the hook was created
+   * with. The response still lands under this hook's own `key` (computed
+   * from the CREATION params, not the override): callers that pass an
+   * override are not accumulating pages keyed on it, so `isCurrent` staying
+   * true for the bound params is the correct read -- this IS the current
+   * answer to "what does this endpoint say", just fetched with one extra
+   * flag.
+   */
+  const refetch = useCallback(async (overrideParams?: Record<string, unknown>) => {
     if (!enabled) {
       setLoading(false);
       return;
@@ -134,7 +149,7 @@ export function useDarajaResource<T>(
     setLoading(true);
     setError(null);
     try {
-      const res = await darajaApi.get<T>(path, { params });
+      const res = await darajaApi.get<T>(path, { params: overrideParams ?? params });
       if (seq !== sequence.current) return;
       setState({ data: res.data, key, fetchedAt: Date.now() });
     } catch (e) {
