@@ -5,11 +5,13 @@
 // account does not have. The header above still named the pre-`git mv` path.
 "use client";
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { ErrorState } from "@/components/common/PageStates";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { Pagination } from "@/components/common/Pagination";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -99,7 +101,9 @@ export default function MerchantsPage() {
   return (
     <>
       <PageHeader title="Merchants"
-                  subtitle={data ? `${data.count} total` : undefined} />
+                  subtitle={data ? `${data.count} total` : undefined}
+                  actions={<Link href="/daraja/merchants/auto-approved">
+                    <Button size="sm" variant="outline">Auto-approved</Button></Link>} />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Input placeholder="Search name, phone, email or TIN"
                className="max-w-xs" value={qInput}
