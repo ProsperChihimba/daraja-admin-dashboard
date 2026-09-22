@@ -154,9 +154,9 @@ export function ActionRequestCard({
   const stale = detail?.stale ?? false;
   const hasKey = Boolean(detail?.idempotency_key);
   const noKeyReason =
-    "This console cannot obtain the approval key the backend requires for "
-    + "this request (idempotency_key is not returned by the API) -- approve "
-    + "from a client that has it, or ask for the endpoint to be fixed.";
+    "This request's approval key (idempotency_key) was not present in the "
+    + "detail response -- reload this request, or approve from a client "
+    + "that has it.";
 
   const approveDisabled = !isPending || expired || stale || !hasKey;
   const approveDisabledReason = !isPending
