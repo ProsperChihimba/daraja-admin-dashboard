@@ -548,3 +548,129 @@ export interface DepositIntentRow {
   statement_row_id: string | null;
   registered: string;
 }
+
+// ---------------------------------------------------------------------------
+// Wallets (GET /dashboard/wallets/*), C3.
+//
+// Field names read directly from dashboard/serializers/wallets.py and
+// dashboard/views/wallets.py, not from any planning doc: `WalletRowSerializer`
+// is an allowlist (`fields = (...)`), so what is typed here is exactly, and
+// only, what the wire sends.
+//
+// `WalletViewSet.pagination_class` is `WalletPagination(DashboardPagination)`
+// -- CURSOR pagination, the same as the deposits/ledger screens, NOT the
+// page-number `Paginated<T>` the merchants roster uses. `CursorPaged<T>`
+// below, and the list/detail screens use `useCursorPages`, not `Pagination`.
+
+/** One row of GET /dashboard/wallets/ -- and, extended with `branch` below,
+ *  the body of GET /dashboard/wallets/<account_id>/. */
+export interface WalletRow {
+  account_id: string;
+  /** CollectionAccount.account_no is `blank=True, null=True`
+   *  (employer/models.py) -- a real wallet can carry neither. */
+  account_no: string | null;
+  /** DecimalField(50,5), DRF-rendered as a string -- e.g. "51738.43000".
+   *  Hand it to formatOpsMoney untouched; never Number()/parseFloat(). */
+  balance: string;
+  active: boolean;
+  /** CollectionAccount.employer is a required FK (`null=False`), so this is
+   *  never actually absent on a real row -- but it rides through a
+   *  `source="employer.employer_id"` CharField, not the model's own PK
+   *  field, so it is typed nullable here rather than assumed non-null on
+   *  faith in one more layer of indirection. */
+  employer_id: string | null;
+  /** Employer.business_name is nullable; a real merchant can have none on
+   *  file. "—", never blank, never the merchant's employer_id standing in
+   *  for a name. */
+  business_name: string | null;
+  /**
+   * More than one wallet carries this exact account number. Computed as a
+   * window `Count` over the whole table (dashboard/views/wallets.py), so it
+   * costs one aggregate for the page, not a query per row. A BLANK
+   * account_no never counts as shared -- several wallets legitimately have
+   * none recorded.
+   *
+   * MUST be visible on the row, not buried in the detail screen: this is
+   * exactly the case where an operator acting on the wrong row moves real
+   * money to the wrong place (expense_payout debits `client_wallet_no`).
+   */
+  shares_account_no: boolean;
+  /** auto_now_add -- stable and monotonic, and what `WalletPagination`
+   *  cursors on. */
+  registered: string;
+}
+
+/** GET /dashboard/wallets/<account_id>/ -- `WalletRow` plus which branch, if
+ *  any, owns this wallet. `branch: null` means this is the employer's MAIN
+ *  wallet (Branch.wallet is a nullable OneToOne), not "no data". */
+export interface WalletDetail extends WalletRow {
+  branch: { branch_id: string; name: string; active: boolean } | null;
+}
+
+/**
+ * One line of GET /dashboard/wallets/<account_id>/statement/ -- a
+ * CollectionAccountTransaction, via WalletStatement.get's plain dict (not a
+ * serializer -- see dashboard/views/wallets.py's `lines.append` block).
+ *
+ * `amountCredited` and `amountDebited` are BOTH always present, DecimalField
+ * strings; exactly one of a real line is non-zero. Rendered as two separate
+ * money columns rather than combined into one signed figure client-side --
+ * subtracting them would be arithmetic on money, which this repo's rules
+ * forbid doing outside the backend.
+ */
+export interface WalletStatementLine {
+  transaction_id: string;
+  /** CollectionAccountTransaction.narration is `blank=True, null=True`. */
+  narration: string | null;
+  /** The raw column, spelled three different ways by three different
+   *  writers ("C"/"D", "CR"/"DR", "Debit") -- kept verbatim for the
+   *  operator, never parsed client-side. The view's own `_direction()` is
+   *  what already turned this into `kind`/the credited-vs-debited split. */
+  debitOrCredit: string | null;
+  amountCredited: string;
+  amountDebited: string;
+  /** The running balance AFTER this line. */
+  balance: string;
+  registered: string;
+  /** branches/views/statement_utils.py::classify's best-effort label
+   *  ("transfer_out", "transfer_in", "refund", "reversal", "fee", ...) --
+   *  free text, not a closed enum the frontend should validate against. */
+  kind: string;
+}
+
+/** The `summary` object WalletStatement.get attaches to the paginated
+ *  envelope -- every figure a decimal STRING, quantized on the backend so an
+ *  empty window's "0" and a funded one's "150.00000" are the same shape. */
+export interface WalletStatementSummary {
+  opening_balance: string;
+  closing_balance: string;
+  money_in: string;
+  money_out: string;
+  total_fees: string;
+}
+
+/**
+ * The `window` object WalletStatement.get attaches alongside `summary` --
+ * the actual start/end dates the summary above was computed over, inclusive,
+ * `YYYY-MM-DD`. Defaults to the last 30 days ending today when the caller
+ * sends neither `start_date` nor `end_date` (`_STATEMENT_WINDOW_DAYS` in
+ * dashboard/views/wallets.py); a screen showing the summary without this is
+ * lying by omission -- "money_out: 4,000" with no dates cannot be told from
+ * a truncated month.
+ */
+export interface WalletStatementWindow {
+  start_date: string;
+  end_date: string;
+}
+
+/**
+ * The full statement page: a cursor-paginated envelope of lines, plus
+ * `summary` and `window` riding on top of it. `summary`/`window` cover the
+ * WHOLE SELECTED WINDOW, recomputed identically on every page of the same
+ * query -- not just the lines on the current page -- so reading them off the
+ * latest-fetched page is always correct, cursor or no cursor.
+ */
+export interface WalletStatementPage extends CursorPaged<WalletStatementLine> {
+  summary: WalletStatementSummary;
+  window: WalletStatementWindow;
+}

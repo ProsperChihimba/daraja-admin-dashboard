@@ -7,6 +7,7 @@ import {
   ScrollText,
   Users,
   Wallet,
+  Banknote,
   BookOpen,
   Inbox,
   ShieldCheck,
@@ -50,6 +51,7 @@ export const darajaSidebarConfig: NavGroup[] = [
     label: "Daraja Ops",
     items: [
       { label: "Merchants", href: "/daraja/merchants", icon: Users },
+      { label: "Wallets", href: "/daraja/wallets", icon: Banknote },
       { label: "Actions", href: "/daraja/actions", icon: ShieldCheck },
       { label: "Alerts", href: "/daraja/alerts", icon: BellRing },
       { label: "Ledger", href: "/daraja/ledger", icon: Wallet },
