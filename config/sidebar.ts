@@ -12,6 +12,7 @@ import {
   Inbox,
   ShieldCheck,
   BellRing,
+  Landmark,
   type LucideIcon,
 } from "lucide-react";
 
@@ -52,6 +53,7 @@ export const darajaSidebarConfig: NavGroup[] = [
     items: [
       { label: "Merchants", href: "/daraja/merchants", icon: Users },
       { label: "Wallets", href: "/daraja/wallets", icon: Banknote },
+      { label: "Treasury", href: "/daraja/treasury", icon: Landmark },
       { label: "Actions", href: "/daraja/actions", icon: ShieldCheck },
       { label: "Alerts", href: "/daraja/alerts", icon: BellRing },
       { label: "Ledger", href: "/daraja/ledger", icon: Wallet },
