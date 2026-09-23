@@ -6,8 +6,17 @@
 // NOT resolve the alert, which only a detector can.
 import darajaApi from "@/lib/darajaApi";
 import type { Paginated } from "@/types/daraja";
+import type { StatusVariant } from "@/components/ui/status_badge";
 
 export type AlertState = "open" | "acknowledged" | "closed";
+
+/** Shared with the detail page so the state badge is always the same
+ * colour wherever an alert's state is shown. */
+export const ALERT_STATE_VARIANT: Record<AlertState, StatusVariant> = {
+  open: "danger",
+  acknowledged: "warning",
+  closed: "neutral",
+};
 
 export type AlertRow = {
   alert_id: string;
@@ -26,13 +35,19 @@ export type AlertRow = {
   acknowledged_at: string | null;
 };
 
+export type AlertDeliveryState = "claimed" | "sent" | "failed" | "skipped";
+
 export type AlertDelivery = {
   delivery_id: string;
   channel: "sms" | "email";
   recipient: string;
   username: string | null;
   attempt: number;
-  state: "sent" | "failed" | "skipped";
+  // `claimed` was added to AlertDelivery.state after this type was first
+  // written (dashboard/models.py's AlertDelivery.CLAIMED) -- written by
+  // _claim() BEFORE a send is attempted, and left behind when the process
+  // dies mid-send. It is NOT a success and must not be folded into `sent`.
+  state: AlertDeliveryState;
   error: string;
   created_at: string;
 };

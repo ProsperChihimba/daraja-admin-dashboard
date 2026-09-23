@@ -1,29 +1,25 @@
 // app/daraja/(ops)/alerts/page.tsx  (URL: /daraja/alerts)
 "use client";
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { ErrorState } from "@/components/common/PageStates";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { Pagination } from "@/components/common/Pagination";
 import { DangerousActionModal } from "@/components/common/DangerousActionModal";
 import { Button } from "@/components/ui/button";
-import { StatusBadge, type StatusVariant } from "@/components/ui/status_badge";
+import { StatusBadge } from "@/components/ui/status_badge";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { useDarajaResource } from "@/lib/darajaAuth";
 import { extractOpsErrorMessage } from "@/lib/darajaActions";
 import {
-  ALERTS_PATH, acknowledgeAlert, type AlertRow, type AlertsPage,
+  ALERT_STATE_VARIANT, ALERTS_PATH, acknowledgeAlert, type AlertRow, type AlertsPage,
 } from "@/lib/darajaAlerts";
 
 const PAGE_SIZE = 50;
 
-const STATE_VARIANT: Record<string, StatusVariant> = {
-  open: "danger",
-  acknowledged: "warning",
-  closed: "neutral",
-};
-
 export default function AlertsPageView() {
+  const router = useRouter();
   const [page, setPage] = React.useState(1);
   const [target, setTarget] = React.useState<AlertRow | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
@@ -48,7 +44,7 @@ export default function AlertsPageView() {
 
   const columns: Column<AlertRow>[] = [
     { key: "state", header: "State",
-      render: (a) => <StatusBadge variant={STATE_VARIANT[a.state] ?? "neutral"}>
+      render: (a) => <StatusBadge variant={ALERT_STATE_VARIANT[a.state] ?? "neutral"}>
         {a.state}</StatusBadge> },
     { key: "subject", header: "Alert",
       render: (a) => <div>
@@ -87,6 +83,7 @@ export default function AlertsPageView() {
 
       <DataTable columns={columns} rows={data?.results ?? []} loading={loading}
                  rowKey={(a) => a.alert_id}
+                 onRowClick={(a) => router.push(`/daraja/alerts/${a.alert_id}`)}
                  emptyMessage="Nothing is wrong. No alerts have been raised." />
       <Pagination page={page} count={data?.count ?? 0} pageSize={PAGE_SIZE}
                   onPage={setPage} />
