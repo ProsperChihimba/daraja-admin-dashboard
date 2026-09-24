@@ -96,3 +96,23 @@ export async function listTreasury(): Promise<TreasuryResponse> {
   const { data } = await darajaApi.get<TreasuryResponse>(TREASURY_PATH);
   return data;
 }
+
+/**
+ * GET /dashboard/treasury/?live=1 -- the ONE call on this screen allowed to
+ * reach Nuvion. Mirrors the Ledger page's own live re-fetch
+ * (`refetchPosition({ live: "1" })` in app/daraja/(ops)/ledger/page.tsx),
+ * which exists for the exact same reason: the ordinary load must never call
+ * a provider that has been throttled for excessive lookups, so only an
+ * operator's explicit click may.
+ *
+ * Returns the WHOLE response, `wallets` included -- the backend recomputes
+ * that side too, but nothing about it needs a network call either way, so
+ * there is no reason to special-case it out. Callers that only care about
+ * the provider figures read `.providers` off the result.
+ */
+export async function refreshTreasuryLive(): Promise<TreasuryResponse> {
+  const { data } = await darajaApi.get<TreasuryResponse>(TREASURY_PATH, {
+    params: { live: "1" },
+  });
+  return data;
+}

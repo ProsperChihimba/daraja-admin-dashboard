@@ -23,10 +23,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatOpsMoney, formatOpsMoneyAs } from "@/lib/darajaMoney";
 import { age } from "@/components/daraja/HealthStrip";
+import { RefreshControl } from "@/components/daraja/RefreshControl";
 import { useDarajaResource } from "@/lib/darajaAuth";
 import { createActionRequest, extractOpsErrorMessage } from "@/lib/darajaActions";
 import {
   TREASURY_PATH,
+  refreshTreasuryLive,
   type ProviderBalanceRow,
   type TreasuryResponse,
   type TreasuryWallet,
@@ -45,31 +47,70 @@ import {
  * HealthStrip's pool figure uses, server-computed, not a browser countdown)
  * and a visible STALE marker when the reading has missed at least one
  * 15-minute poll.
+ *
+ * THE REFRESH CONTROL is the only way an operator reaches `?live=1` --
+ * modelled on the Ledger page's own Refresh button
+ * (`refetchPosition({ live: "1" })` in app/daraja/(ops)/ledger/page.tsx),
+ * the same reasoning applies here: the mount-time load must never touch
+ * Nuvion, so only this explicit click may. `refreshing`/`onRefresh` and
+ * `refreshError` are owned by the page, not this component: a manual
+ * refresh must not disturb `wallets` or the page's own error banner, and
+ * a failed refresh must leave `row` (the last good reading) on screen
+ * exactly as it was -- never blanked -- with the failure shown alongside
+ * it, not instead of it.
  */
-function ProviderBalanceCard({ row }: { row: ProviderBalanceRow }) {
+function ProviderBalanceCard({
+  row,
+  fetchedAt,
+  refreshing,
+  refreshError,
+  onRefresh,
+}: {
+  row: ProviderBalanceRow;
+  fetchedAt: number | null;
+  refreshing: boolean;
+  refreshError: string | null;
+  onRefresh: () => void;
+}) {
   return (
     <Card className="mb-4">
-      <CardContent className="flex items-center justify-between gap-4 py-4">
-        <div>
-          <div className="text-sm font-medium text-text">{row.name}</div>
-          {row.error ? (
-            <div className="text-xs text-danger-fg">{row.error}</div>
-          ) : (
-            <div className="text-xs text-text-muted">
-              measured {age(row.age_seconds)}
-              {row.stale ? (
-                <span className="ml-2 rounded-pill bg-warning-bg/40 px-2 py-0.5 font-semibold text-warning-fg">
-                  STALE — a fresh poll may be overdue, verify before acting
-                </span>
-              ) : null}
+      <CardContent className="flex flex-col gap-2 py-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-text">{row.name}</div>
+            {row.error ? (
+              <div className="text-xs text-danger-fg">{row.error}</div>
+            ) : (
+              <div className="text-xs text-text-muted">
+                measured {age(row.age_seconds)}
+                {row.stale ? (
+                  <span className="ml-2 rounded-pill bg-warning-bg/40 px-2 py-0.5 font-semibold text-warning-fg">
+                    STALE — a fresh poll may be overdue, verify before acting
+                  </span>
+                ) : null}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <div className="text-lg font-semibold text-text">
+                {row.error ? "—" : formatOpsMoneyAs(row.currency, row.balance)}
+              </div>
             </div>
-          )}
-        </div>
-        <div className="text-right">
-          <div className="text-lg font-semibold text-text">
-            {row.error ? "—" : formatOpsMoneyAs(row.currency, row.balance)}
+            {/* `busy` alone disables the button, so a double-click cannot
+                fire a second live Nuvion call -- `onRefresh` (the page's
+                handler) re-guards the same thing for defense in depth. */}
+            <RefreshControl
+              label="Fetched"
+              fetchedAt={fetchedAt}
+              busy={refreshing}
+              onRefresh={onRefresh}
+            />
           </div>
         </div>
+        {refreshError ? (
+          <p className="text-xs text-danger-fg">{refreshError}</p>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -199,14 +240,59 @@ function SweepRequestModal({
 }
 
 export default function TreasuryPage() {
-  const { data, loading, error, refetch } = useDarajaResource<TreasuryResponse>(
+  const { data, loading, error, refetch, fetchedAt } = useDarajaResource<TreasuryResponse>(
     TREASURY_PATH,
   );
   const [target, setTarget] = React.useState<TreasuryWallet | null>(null);
   const [requestedMessage, setRequestedMessage] = React.useState<string | null>(null);
 
+  // The provider card's own `?live=1` refresh, entirely separate from the
+  // page's `loading`/`error` (which belong to the ordinary, non-live GET):
+  // a failed live read must show ITS OWN error beside the last good
+  // reading, never blank the card or trip the page-wide ErrorState the
+  // wallets table uses. `override` is null until a manual refresh
+  // succeeds, at which point it wins over `data.providers` -- and is
+  // dropped again the moment a fresh ORDINARY page fetch lands (mount,
+  // error retry, or a completed sweep request via `refetch()` below),
+  // because that fetch's own `providers` is at least as current (the
+  // stored reading may even have moved on its own, from the 15-minute
+  // cron poll).
+  const [providerOverride, setProviderOverride] = React.useState<{
+    rows: ProviderBalanceRow[];
+    fetchedAt: number;
+  } | null>(null);
+  const [providerRefreshing, setProviderRefreshing] = React.useState(false);
+  const [providerRefreshError, setProviderRefreshError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setProviderOverride(null);
+  }, [data]);
+
+  async function refreshNuvionBalance() {
+    // Belt and suspenders alongside RefreshControl's own `disabled={busy}`:
+    // this must not let a double-click fire two live Nuvion calls.
+    if (providerRefreshing) return;
+    setProviderRefreshing(true);
+    setProviderRefreshError(null);
+    try {
+      const fresh = await refreshTreasuryLive();
+      setProviderOverride({ rows: fresh.providers, fetchedAt: Date.now() });
+    } catch (e) {
+      // The stored reading (`data.providers`, or a still-newer earlier
+      // override) is left completely untouched here -- only the error
+      // state changes, so the card keeps showing the last good figure and
+      // its age exactly as it did before this click.
+      setProviderRefreshError(
+        extractOpsErrorMessage(e, "Could not refresh the Nuvion balance."),
+      );
+    } finally {
+      setProviderRefreshing(false);
+    }
+  }
+
   const wallets = data?.wallets ?? [];
-  const providers = data?.providers ?? [];
+  const providers = providerOverride?.rows ?? data?.providers ?? [];
+  const providersFetchedAt = providerOverride?.fetchedAt ?? fetchedAt;
 
   const columns: Column<TreasuryWallet>[] = [
     {
@@ -303,7 +389,14 @@ export default function TreasuryPage() {
           figure into that table's Balance column with no currency label
           is exactly the misread this section exists to avoid. */}
       {providers.map((row) => (
-        <ProviderBalanceCard key={row.key} row={row} />
+        <ProviderBalanceCard
+          key={row.key}
+          row={row}
+          fetchedAt={providersFetchedAt}
+          refreshing={providerRefreshing}
+          refreshError={providerRefreshError}
+          onRefresh={refreshNuvionBalance}
+        />
       ))}
 
       {/* Only a failure with nothing to show takes the whole area -- rows
