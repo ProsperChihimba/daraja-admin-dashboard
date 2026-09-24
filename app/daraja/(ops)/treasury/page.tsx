@@ -166,7 +166,14 @@ export default function TreasuryPage() {
     {
       key: "name",
       header: "Wallet",
-      render: (w) => <span className="font-medium text-text">{w.name}</span>,
+      render: (w) => (
+        <div>
+          <span className="font-medium text-text">{w.name}</span>
+          {w.note ? (
+            <div className="text-xs text-danger-fg">{w.note}</div>
+          ) : null}
+        </div>
+      ),
     },
     {
       key: "balance",
