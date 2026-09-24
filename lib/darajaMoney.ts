@@ -126,10 +126,47 @@ function opsAmountDigits(
  *
  * A zero is an assertion about a merchant's money. It is displayed only when
  * the backend actually said zero.
+ *
+ * HARDCODED TO "TZS" ON PURPOSE. Every existing call site is a wallet ledger
+ * figure, and this system has TZS everywhere except one screen (Treasury's
+ * Nuvion Liquidity row, which is USD) -- see `formatOpsMoneyAs` below for
+ * that one currency-carrying figure, kept as a SEPARATE function rather than
+ * an optional currency argument here. An optional argument silently
+ * defaulting to "TZS" is exactly how a USD value would end up rendered with
+ * no currency at all the first time a caller forgot to pass it -- the two
+ * order of magnitude misread this whole module exists to prevent, just moved
+ * one call site over. A distinct name has no default to forget.
  */
 export function formatOpsMoney(
   value: string | number | null | undefined,
 ): string {
   const digits = opsAmountDigits(value);
   return digits === null ? UNKNOWN_AMOUNT : `TZS ${digits}`;
+}
+
+/**
+ * "USD 1,270.84" (or whatever `currency` says) -- the currency-carrying
+ * counterpart to `formatOpsMoney`, for the one figure on these screens that
+ * is NOT TZS: Nuvion's Liquidity balance on Treasury.
+ *
+ * `currency` is REQUIRED, not defaulted, and is rendered as the backend sent
+ * it (DRF's `currency: "USD"` on the provider row) -- never assumed, never
+ * hardcoded, so a second provider in a different currency renders correctly
+ * with no code change here. Same rules as `formatOpsMoney` otherwise: no
+ * `Number()`/`parseFloat()`/`toFixed()`, nothing rounded away, a value that
+ * cannot be read renders `UNKNOWN_AMOUNT` rather than a number, and a real
+ * zero is shown only when the backend actually said zero.
+ *
+ * NEVER pass a USD (or any non-TZS) figure through `formatOpsMoney` instead
+ * of this: that function's "TZS" prefix is not a placeholder, and a figure
+ * rendered through it would read as TZS to anyone looking at the screen --
+ * on Nuvion's account, a two-order-of-magnitude misread ($1,270 looking like
+ * 1,270 shillings).
+ */
+export function formatOpsMoneyAs(
+  currency: string,
+  value: string | number | null | undefined,
+): string {
+  const digits = opsAmountDigits(value);
+  return digits === null ? UNKNOWN_AMOUNT : `${currency} ${digits}`;
 }

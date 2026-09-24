@@ -55,8 +55,36 @@ export type TreasuryWallet = {
   note?: string | null;
 };
 
+// One provider's own account balance -- today only Nuvion's Liquidity
+// account, the USD pool that funds card issuing ($0.50/card) and every
+// top-up. Field-for-field from dashboard/views/treasury.py's `_nuvion_row`:
+//
+//   key, name, balance, currency, measured_at, age_seconds, stale, error,
+//   account_ref
+//
+// `balance` is a decimal STRING in MAJOR units ("1270.84"), paired with
+// `currency` -- NEVER render it through `formatOpsMoney` (that formatter is
+// hardcoded "TZS"), use `formatOpsMoneyAs(row.currency, row.balance)`
+// instead. `balance` is `null` -- never "0.00" -- whenever no reading has
+// ever been taken, or the reading itself failed; `error` explains why, and
+// `stale` is true in both of those cases as well as whenever the newest
+// reading is older than 30 minutes. The endpoint never calls the provider on
+// an ordinary load; only `?live=1` does.
+export type ProviderBalanceRow = {
+  key: string;
+  name: string;
+  balance: string | null;
+  currency: string;
+  measured_at: string | null;
+  age_seconds: number | null;
+  stale: boolean;
+  error: string | null;
+  account_ref: string;
+};
+
 export type TreasuryResponse = {
   wallets: TreasuryWallet[];
+  providers: ProviderBalanceRow[];
 };
 
 export const TREASURY_PATH = "/treasury/";

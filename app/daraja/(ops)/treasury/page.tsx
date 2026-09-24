@@ -21,14 +21,59 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatOpsMoney } from "@/lib/darajaMoney";
+import { formatOpsMoney, formatOpsMoneyAs } from "@/lib/darajaMoney";
+import { age } from "@/components/daraja/HealthStrip";
 import { useDarajaResource } from "@/lib/darajaAuth";
 import { createActionRequest, extractOpsErrorMessage } from "@/lib/darajaActions";
 import {
   TREASURY_PATH,
+  type ProviderBalanceRow,
   type TreasuryResponse,
   type TreasuryWallet,
 } from "@/lib/darajaTreasury";
+
+/**
+ * One provider's own account balance -- today only Nuvion Liquidity, the
+ * USD pool that funds card issuing ($0.50/card) and every top-up. See
+ * lib/darajaTreasury.ts's `ProviderBalanceRow` for the full contract.
+ *
+ * `row.error` wins outright, same ordering HealthStrip's pool figure uses:
+ * a failed or missing reading explains the dash and there is nothing else
+ * worth adding. Otherwise the figure is rendered through `formatOpsMoneyAs`
+ * -- NEVER `formatOpsMoney`, which is hardcoded "TZS" and would silently
+ * mislabel a dollar figure -- beside its age (the same `age()` clock
+ * HealthStrip's pool figure uses, server-computed, not a browser countdown)
+ * and a visible STALE marker when the reading has missed at least one
+ * 15-minute poll.
+ */
+function ProviderBalanceCard({ row }: { row: ProviderBalanceRow }) {
+  return (
+    <Card className="mb-4">
+      <CardContent className="flex items-center justify-between gap-4 py-4">
+        <div>
+          <div className="text-sm font-medium text-text">{row.name}</div>
+          {row.error ? (
+            <div className="text-xs text-danger-fg">{row.error}</div>
+          ) : (
+            <div className="text-xs text-text-muted">
+              measured {age(row.age_seconds)}
+              {row.stale ? (
+                <span className="ml-2 rounded-pill bg-warning-bg/40 px-2 py-0.5 font-semibold text-warning-fg">
+                  STALE — a fresh poll may be overdue, verify before acting
+                </span>
+              ) : null}
+            </div>
+          )}
+        </div>
+        <div className="text-right">
+          <div className="text-lg font-semibold text-text">
+            {row.error ? "—" : formatOpsMoneyAs(row.currency, row.balance)}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 /**
  * Requesting a sweep. `wallet.action` is the row's own `action_type`
@@ -161,6 +206,7 @@ export default function TreasuryPage() {
   const [requestedMessage, setRequestedMessage] = React.useState<string | null>(null);
 
   const wallets = data?.wallets ?? [];
+  const providers = data?.providers ?? [];
 
   const columns: Column<TreasuryWallet>[] = [
     {
@@ -250,6 +296,15 @@ export default function TreasuryPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      {/* Provider balances (today: Nuvion Liquidity) -- shown ABOVE the
+          wallets table and rendered through their own currency-aware
+          card, never the TZS-shaped DataTable columns below: mixing a USD
+          figure into that table's Balance column with no currency label
+          is exactly the misread this section exists to avoid. */}
+      {providers.map((row) => (
+        <ProviderBalanceCard key={row.key} row={row} />
+      ))}
 
       {/* Only a failure with nothing to show takes the whole area -- rows
           already read stay on screen, with the error and Retry above them
