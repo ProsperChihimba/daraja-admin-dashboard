@@ -8,6 +8,21 @@
 // `ActionRequestDetail.idempotency_key` in lib/darajaActions.ts). A disabled
 // button with a reason underneath it is the honest state; a button that
 // sends a best-guess header is not.
+//
+// (The key itself IS sent by the backend now -- it is in
+// `ActionRequestSerializer.Meta.fields`, so every detail response carries it
+// and approving from this screen works; it was done against production on
+// 2026-09-24. An earlier version of this comment said the backend never sent
+// it. The `hasKey` guard below is not about that: the QUEUE serializer still
+// strips the field by design, and a detail fetch can fail, so "we do not hold
+// the key" remains a state this card can genuinely be in.)
+//
+// The card also carries the other half of the money question. `state` on the
+// request says whether it was APPROVED; it reads `executed` the moment the
+// intent commits, before any provider is called. Whether the rail did
+// anything is in `detail.executions` -- rendered below by
+// components/daraja/ActionExecutions.tsx, and, for an `unknown`, as a blocking
+// banner above everything else on this card.
 "use client";
 import * as React from "react";
 import Link from "next/link";
@@ -15,6 +30,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge, type StatusVariant } from "@/components/ui/status_badge";
 import { Button } from "@/components/ui/button";
 import { DangerousActionModal } from "@/components/common/DangerousActionModal";
+import {
+  ExecutionList,
+  UnknownExecutionBanner,
+} from "@/components/daraja/ActionExecutions";
 import { formatDateTime } from "@/lib/format";
 import { formatOpsMoney } from "@/lib/darajaMoney";
 import {
@@ -34,12 +53,14 @@ const STATE_VARIANT: Record<ActionRequest["state"], StatusVariant> = {
   failed: "danger",
 };
 
-/** "employer.approve" -> "Activate merchant". Named for the two actions this
- * plan ships; anything else falls back to a mechanical de-slug so a future
+/** "employer.approve" -> "Activate merchant". Named for the actions this
+ * console ships; anything else falls back to a mechanical de-slug so a future
  * action_type never renders blank. */
 function actionLabel(actionType: string): string {
   if (actionType === "employer.approve") return "Activate merchant";
   if (actionType === "employer.suspend") return "Suspend merchant";
+  if (actionType === "card.freeze") return "Freeze card (ops hold)";
+  if (actionType === "card.unfreeze") return "Unfreeze card";
   return actionType.replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -134,8 +155,25 @@ export function ActionRequestCard({
 
   const isPending = request.state === "pending";
 
+  // WHICH ROWS ARE WORTH A DETAIL FETCH, AND WHY IT IS NO LONGER ONLY THE
+  // PENDING ONES. This used to fetch for `pending` alone, because the only
+  // thing the detail added was the staleness diff. It now also carries
+  // `executions` -- and an execution stuck in `unknown` sits on a request
+  // whose own state reads `executed`, because the request goes to `executed`
+  // when the intent commits, before the provider is even called. Fetching
+  // only for pending rows would mean the banner that says "a card may or may
+  // not be spendable right now" could never appear.
+  //
+  // `refused` and `expired` are still skipped, and that is not a guess: an
+  // execution row is written by the APPROVE path, so a request nobody
+  // approved has none, and a terminal request reports `diff: {}` / `stale:
+  // false` anyway. This is a page of up to 50 cards, so the rows that cannot
+  // carry anything new do not each cost a request.
+  const wantsDetail =
+    isPending || request.state === "executed" || request.state === "failed";
+
   const loadDetail = React.useCallback(async () => {
-    if (!isPending) return;
+    if (!wantsDetail) return;
     try {
       const d = await getActionRequestDetail(request.request_id);
       setDetail(d);
@@ -144,7 +182,7 @@ export function ActionRequestCard({
       setDetailError(extractOpsErrorMessage(e, "Could not load the current status."));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [request.request_id, isPending]);
+  }, [request.request_id, wantsDetail]);
 
   React.useEffect(() => {
     void loadDetail();
@@ -168,6 +206,20 @@ export function ActionRequestCard({
         : !hasKey
           ? noKeyReason
           : null;
+
+  // Every `unknown` execution on this request, newest first as the backend
+  // ordered them. Normally at most one -- there is one execution per request
+  // (ActionExecution's own docstring) -- but this does not assume that, and a
+  // second unknown would be a second banner rather than one silently hidden.
+  const unknownExecutions =
+    detail?.executions?.filter((ex) => ex.state === "unknown") ?? [];
+
+  // `target_ref` is NOT always a merchant. It is an employer_id for
+  // `employer.*`, a card_id for `card.*` and a treasury wallet key for
+  // `treasury.*` (lib/darajaTreasury.ts `TreasuryWallet.key`), so linking it
+  // to /daraja/merchants/<target_ref> unconditionally -- as this card used to
+  // -- produces a confident link to a merchant page that cannot exist.
+  const targetIsMerchant = request.action_type.startsWith("employer.");
 
   async function handleApprove() {
     if (!detail?.idempotency_key) {
@@ -199,14 +251,39 @@ export function ActionRequestCard({
   }
 
   return (
-    <Card>
+    // The ring turns the WHOLE card red when an execution is unknown. In a
+    // queue of fifty cards the banner alone is not enough -- an operator
+    // scrolling past has to be stopped by the card, not find the banner once
+    // they have already opened it.
+    <Card className={unknownExecutions.length > 0 ? "ring-2 ring-danger-fg" : undefined}>
+      {/* ABOVE EVERYTHING, including the header. This is the one thing on
+          this screen that means a card may or may not be spendable at Nuvion
+          right now; it does not sit below a preview, and it is not a pill. */}
+      {unknownExecutions.length > 0 ? (
+        <div className="space-y-3 px-4">
+          {unknownExecutions.map((ex) => (
+            <UnknownExecutionBanner
+              key={ex.execution_id}
+              execution={ex}
+              actionLabel={actionLabel(request.action_type)}
+              targetRef={request.target_ref}
+              onResolved={loadDetail}
+            />
+          ))}
+        </div>
+      ) : null}
+
       <CardHeader className="flex flex-row items-start justify-between gap-3">
         <div>
           <CardTitle className="text-base">{actionLabel(request.action_type)}</CardTitle>
           <div className="mt-1 text-sm text-text-muted">
-            <Link href={`/daraja/merchants/${request.target_ref}`} className="underline">
-              {request.target_ref}
-            </Link>
+            {targetIsMerchant ? (
+              <Link href={`/daraja/merchants/${request.target_ref}`} className="underline">
+                {request.target_ref}
+              </Link>
+            ) : (
+              <span className="font-mono text-xs select-all">{request.target_ref}</span>
+            )}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -244,7 +321,22 @@ export function ActionRequestCard({
           </div>
         ) : null}
 
-        {detailError ? <p className="text-xs text-danger-fg">{detailError}</p> : null}
+        {/* `?? []` rather than trusting the type: this field arrived with the
+            two-phase execute work, and a console deployed ahead of the
+            backend would otherwise crash the whole queue on `.length` of
+            undefined. An older backend simply shows no rail section. */}
+        {detail ? <ExecutionList executions={detail.executions ?? []} /> : null}
+
+        {detailError ? (
+          <p className="text-xs text-danger-fg">
+            {detailError}
+            {wantsDetail
+              ? " Nothing below says what happened at the rail, and an"
+                + " unresolved unknown would not be shown — retry before"
+                + " assuming there is none."
+              : ""}
+          </p>
+        ) : null}
 
         {isPending && stale && detail ? (
           <div className="rounded-card border border-warning-fg/40 bg-warning-bg/40 p-3">
