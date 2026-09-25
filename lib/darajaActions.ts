@@ -97,6 +97,18 @@ export type ActionRequest = {
   decided_at: string | null;
   outcome: Record<string, unknown>;
   expired: boolean;
+  /**
+   * How many of this row's executions are in `unknown` and still open --
+   * annotated on the queue queryset as one COUNT for the whole page
+   * (dashboard/views/actions.py, ActionRequests.get). `resolved` does not
+   * count, so the badge clears the moment a human closes the question.
+   *
+   * It exists so the queue can tell which rows are worth opening WITHOUT
+   * fetching each one's detail. Optional on the type because the single-row
+   * create/detail responses use the fuller serializer, which has no reason
+   * to carry it.
+   */
+  unknown_executions?: number;
 };
 
 /**

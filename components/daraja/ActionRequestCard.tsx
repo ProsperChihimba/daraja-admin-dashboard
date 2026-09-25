@@ -169,8 +169,21 @@ export function ActionRequestCard({
   // approved has none, and a terminal request reports `diff: {}` / `stale:
   // false` anyway. This is a page of up to 50 cards, so the rows that cannot
   // carry anything new do not each cost a request.
-  const wantsDetail =
-    isPending || request.state === "executed" || request.state === "failed";
+  // A PENDING row needs detail for two things it cannot get from the list:
+  // the live staleness diff, and the idempotency_key the approve call must
+  // send. A terminal row needs it only to show executions -- and the list now
+  // says outright how many OPEN unknowns each row holds
+  // (ActionRequestListSerializer.unknown_executions, one annotated COUNT for
+  // the whole page), so a settled row costs nothing until there is genuinely
+  // something on it to see.
+  //
+  // The earlier version fetched detail for every executed and failed row,
+  // which on a page of 50 was up to 50 round trips, each of them also running
+  // read_state() once per execution. A queue that slow is a queue people stop
+  // opening, and this is the queue where an operator finds out a card may or
+  // may not be spendable.
+  const hasOpenUnknown = (request.unknown_executions ?? 0) > 0;
+  const wantsDetail = isPending || hasOpenUnknown;
 
   const loadDetail = React.useCallback(async () => {
     if (!wantsDetail) return;
