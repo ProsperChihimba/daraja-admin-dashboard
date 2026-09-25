@@ -18,10 +18,23 @@
 // 'unreconciled'. The preview the approver sees carries those warnings -- the
 // copy below points at them rather than restating them, so there is one place
 // they can go stale.
+//
+// AND THE STRANDED TOP-UP PANEL, WHICH IS A DIFFERENT KIND OF CONTROL. A
+// stranded card top-up is why a merchant's cards are frozen 'unreconciled' in
+// the table below -- their shillings left the wallet and Nuvion never
+// delivered the dollars. So the control that hands those shillings back
+// belongs on the screen where the consequence is already visible, not on one
+// of its own. It is DESTRUCTIVE and it rests on a human's word about Nuvion,
+// which is what components/daraja/ReversalRequest.tsx exists to make
+// impossible to click through casually.
 "use client";
 import * as React from "react";
 import Link from "next/link";
 import { CursorList } from "@/components/daraja/CursorList";
+import {
+  ReversalPanel,
+  CARDTOPUP_REVERSE,
+} from "@/components/daraja/ReversalRequest";
 import { DangerousActionModal } from "@/components/common/DangerousActionModal";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -105,6 +118,12 @@ export function CardsTab({ employerId }: { employerId: string }) {
       ) : null}
 
       {error ? <p className="mb-2 text-xs text-danger-fg">{error}</p> : null}
+
+      {/* Above the table on purpose: the frozen cards below are the SYMPTOM
+          of the stranded top-up this returns the shillings for, and an
+          unfreeze request filed without settling the top-up first is refused
+          outright anyway. */}
+      <ReversalPanel kind="cardtopup" may={may(CARDTOPUP_REVERSE)} />
 
       <CursorList<CardRow>
         path={`/employers/${employerId}/cards/`}

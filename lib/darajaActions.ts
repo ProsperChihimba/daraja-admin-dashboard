@@ -175,6 +175,30 @@ type OpsErrorEnvelope = {
 };
 
 /**
+ * Undoes one leaky corner of the backend's error envelope.
+ *
+ * A handler that refuses a request raises a bare `ValueError`, which
+ * `ActionRequests.post` converts with `ValidationError({"detail": str(exc)})`.
+ * DRF normalises that to `{"detail": [ErrorDetail("…", code="invalid")]}`, and
+ * `dashboard_exception_handler` takes the `"detail" in detail` branch and sets
+ * `message = str(detail["detail"])` -- `str()` of a LIST, which renders Python
+ * reprs. So the reason a reversal was refused arrives on the wire as
+ * `[ErrorDetail(string='payment X was touched 2 minutes ago …', code='invalid')]`.
+ *
+ * That message is the whole point of the refusal: it names the recovery
+ * command, or says how much longer to wait. Printing a Python repr at an
+ * operator is how a clear instruction gets read as a crash. This pulls the
+ * sentence back out and leaves anything that does not match untouched -- the
+ * envelope is not "fixed" here by guessing at shapes, only this one exact
+ * spelling is unwrapped.
+ */
+function unwrapErrorDetailRepr(message: string): string {
+  const parts = [...message.matchAll(/ErrorDetail\(string='((?:[^'\\]|\\.)*)'/g)]
+    .map((m) => m[1].replace(/\\'/g, "'").replace(/\\\\/g, "\\"));
+  return parts.length > 0 ? parts.join(" ") : message;
+}
+
+/**
  * Pulls a human message out of this app's error envelope --
  * `{"error": {"code", "message", "fields"}}`, NOT `{"message": ...}` (that is
  * the mobile API's convention, asserted against this one by
@@ -186,7 +210,9 @@ export function extractOpsErrorMessage(
   fallback = "Something went wrong.",
 ): string {
   const body = (e as { response?: { data?: OpsErrorEnvelope } })?.response?.data;
-  return body?.error?.message ?? (e instanceof Error ? e.message : fallback);
+  const message = body?.error?.message;
+  if (typeof message === "string") return unwrapErrorDetailRepr(message);
+  return e instanceof Error ? e.message : fallback;
 }
 
 /**
