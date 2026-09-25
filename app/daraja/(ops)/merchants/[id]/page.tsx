@@ -24,6 +24,10 @@ import { WalletTab } from "@/components/daraja/WalletTab";
 import { CardsTab } from "@/components/daraja/CardsTab";
 import { PeopleTab } from "@/components/daraja/PeopleTab";
 import { KycTab } from "@/components/daraja/KycTab";
+import {
+  ClientRateUnderwaterBanner,
+  PricingTab,
+} from "@/components/daraja/PricingTab";
 import { formatDate } from "@/lib/format";
 import { formatOpsMoney } from "@/lib/darajaMoney";
 import { useDarajaResource } from "@/lib/darajaAuth";
@@ -217,6 +221,20 @@ export default function MerchantDetailPage() {
         </Card>
       ) : null}
 
+      {/*
+        THE UNDERWATER FLAG, ABOVE THE TABS ON PURPOSE. `rate.below_universal`
+        means Daraja is selling this merchant dollars below the standard price
+        -- on every top-up, expense and payout quote, indefinitely, because a
+        client rate does not expire and does not track the universal rate. It
+        is the same condition dashboard.alerts.detectors
+        .client_rate_below_universal pages ops on as an IMPORTANT alert, and
+        the point of repeating it here is that somebody notices it while they
+        are already looking at this merchant for some other reason. Inside the
+        Pricing tab alone it would only be seen by someone who already
+        suspected it. Renders nothing when the flag is false.
+      */}
+      <ClientRateUnderwaterBanner merchant={m} />
+
       {m.wallet === null ? (
         // `wallet` is the first-opened ACTIVE CollectionAccount, so null here
         // means "no ACTIVE wallet" -- not necessarily "no wallet at all",
@@ -246,6 +264,7 @@ export default function MerchantDetailPage() {
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
           <TabsTrigger value="wallet">Wallet &amp; statement</TabsTrigger>
           <TabsTrigger value="cards">Cards</TabsTrigger>
+          <TabsTrigger value="pricing">Pricing</TabsTrigger>
           <TabsTrigger value="people">Employees &amp; branches</TabsTrigger>
           <TabsTrigger value="kyc">KYC</TabsTrigger>
         </TabsList>
@@ -350,6 +369,12 @@ export default function MerchantDetailPage() {
         <TabsContent value="expenses"><ExpensesTab employerId={id} /></TabsContent>
         <TabsContent value="wallet"><WalletTab employerId={id} /></TabsContent>
         <TabsContent value="cards"><CardsTab employerId={id} /></TabsContent>
+        {/* `merchant`, not `employerId`: the rate arrives on THIS page's own
+            detail response (EmployerDetailSerializer.get_rate), so the tab
+            needs no fetch of its own -- and filing a pricing request changes
+            nothing until a second admin approves it, so there is nothing for
+            this page to refetch afterwards either. Same shape as KycTab. */}
+        <TabsContent value="pricing"><PricingTab merchant={m} /></TabsContent>
         <TabsContent value="people"><PeopleTab employerId={id} /></TabsContent>
         <TabsContent value="kyc"><KycTab merchant={m} /></TabsContent>
       </Tabs>

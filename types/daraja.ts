@@ -100,6 +100,63 @@ export interface MerchantDetail {
     brela_certificate: string | null;
     memart: string | null;
   };
+  /**
+   * What this merchant is charged for dollars, and what everyone else pays
+   * (`EmployerDetailSerializer.get_rate`).
+   *
+   * TYPED NON-OPTIONAL, READ DEFENSIVELY. Same stance as `balance` above: the
+   * type is a claim about the backend's contract, not a guarantee about the
+   * bytes that arrive, and this key landed on the backend after this console
+   * was first deployed. `PricingTab` therefore accepts the absent value and
+   * says it cannot read the rate, rather than rendering the shape of a
+   * merchant who is on the universal rate -- which is what a `?? {}`-style
+   * default would silently assert about somebody's pricing.
+   */
+  rate: MerchantRate;
+}
+
+/**
+ * The live `EmployerConversionRate` row behind an override, as the detail
+ * serializer emits it. `note` is the REQUESTER's reason, trimmed to 200 chars
+ * by `pricing.set_client_rate`'s execute(); `granted_by` is the ops.admin who
+ * APPROVED it, never the one who filed it.
+ */
+export interface MerchantRateOverride {
+  rate_id: string;
+  /** TZS per USD, six decimal places, DRF-rendered as a string. Never
+   *  Number()/parseFloat()/toFixed() it -- see lib/darajaMoney.ts. */
+  tzs_per_usdc: string;
+  starts_at: string;
+  /** Null for every rate this system can grant: an override does NOT expire
+   *  (dashboard/actions/pricing.py leaves it null on purpose). A non-null
+   *  value can only have been written by a clear closing the period, or by
+   *  hand in the database. */
+  ends_at: string | null;
+  granted_by: string;
+  note: string;
+  created_at: string;
+}
+
+export interface MerchantRate {
+  /** What THIS merchant is charged. Null only when no rate is configured at
+   *  all -- `rate_for` raising NoRateConfigured, caught by the serializer. */
+  effective: string | null;
+  /** What everyone else pays. Null when there is no universal ConversionRate
+   *  row at all. */
+  universal: string | null;
+  /** Driven by whether a LIVE override exists, not by whether a number could
+   *  be found -- so it is always exactly one of these two, even in the
+   *  no-rate-configured case. */
+  source: "override" | "universal";
+  override: MerchantRateOverride | null;
+  /**
+   * override < universal, the EXACT comparison
+   * `dashboard.alerts.detectors.client_rate_below_universal` pages ops on --
+   * computed by the backend, never recomputed here (this console does no
+   * arithmetic on a rate, and a second definition would drift from the
+   * detector's). An override merely EQUAL to universal is not flagged.
+   */
+  below_universal: boolean;
 }
 
 /** One row of the activity envelope below -- see ActivityEnvelope for the
