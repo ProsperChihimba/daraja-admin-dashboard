@@ -54,23 +54,43 @@ export function DangerousActionModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      {/* THE BODY SCROLLS; THE TITLE AND THE BUTTONS DO NOT.
+        *
+        * DialogContent is a fixed, centred `grid` with no max-height, so a tall
+        * body ran off the viewport in both directions with nothing scrollable --
+        * reported on the universal-rate dialog, which is the tallest, but it was
+        * every confirm dialog in this app, including the approve dialogs for
+        * money actions. Someone who cannot reach Confirm cannot approve, and
+        * someone who cannot scroll cannot read the warning they are approving
+        * against.
+        *
+        * Capping the whole content and scrolling THAT would let Confirm scroll
+        * out of sight. Three grid rows instead -- header, body, footer -- with
+        * only the middle one scrolling, so the action stays reachable and the
+        * title stays visible above whatever you are reading.
+        *
+        * minmax(0,1fr), not 1fr: a grid row will not shrink below its content
+        * without it, and the overflow would never engage. Same trap as min-h-0
+        * in flexbox. */}
+      <DialogContent className="max-h-[85vh] grid-rows-[auto_minmax(0,1fr)_auto]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <div className="text-sm text-text-muted">{impact}</div>
-        {requireReason ? (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="dangerous-action-reason">Reason</Label>
-            <Textarea
-              id="dangerous-action-reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Explain why you're doing this…"
-              disabled={submitting}
-            />
-          </div>
-        ) : null}
+        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
+          <div className="text-sm text-text-muted">{impact}</div>
+          {requireReason ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="dangerous-action-reason">Reason</Label>
+              <Textarea
+                id="dangerous-action-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Explain why you're doing this…"
+                disabled={submitting}
+              />
+            </div>
+          ) : null}
+        </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
