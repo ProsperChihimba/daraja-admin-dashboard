@@ -24,12 +24,14 @@ import { Label } from "@/components/ui/label";
 import { formatOpsMoney, formatOpsMoneyAs } from "@/lib/darajaMoney";
 import { age } from "@/components/daraja/HealthStrip";
 import { RefreshControl } from "@/components/daraja/RefreshControl";
+import { UniversalRateCard } from "@/components/daraja/UniversalRateCard";
 import { useDarajaResource } from "@/lib/darajaAuth";
 import { createActionRequest, extractOpsErrorMessage } from "@/lib/darajaActions";
 import {
   TREASURY_PATH,
   refreshTreasuryLive,
   type ProviderBalanceRow,
+  type TreasuryRate,
   type TreasuryResponse,
   type TreasuryWallet,
 } from "@/lib/darajaTreasury";
@@ -292,6 +294,14 @@ export default function TreasuryPage() {
 
   const wallets = data?.wallets ?? [];
   const providers = providerOverride?.rows ?? data?.providers ?? [];
+  // Typed non-optional on TreasuryResponse, read as though it might be absent
+  // -- the same treatment PricingTab gives `MerchantDetail.rate`, for the same
+  // reason: a console deployed ahead of the backend that added the key must say
+  // it cannot read the rate rather than draw the card of a platform with no
+  // rate configured. Taken from `data`, never from the `?live=1` override
+  // (which is only ever consulted for `providers`): both carry the same block,
+  // and a stale one here would be a stale claim about everybody's price.
+  const rate = data?.rate as TreasuryRate | undefined;
   const providersFetchedAt = providerOverride?.fetchedAt ?? fetchedAt;
 
   const columns: Column<TreasuryWallet>[] = [
@@ -382,6 +392,13 @@ export default function TreasuryPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      {/* The platform's own price for a dollar, FIRST: it is the most
+          consequential number on this screen (every top-up, expense and payout
+          quote is priced from it) and, when a client rate has been left below
+          it, the one nobody should be able to scroll past. Its own card, with
+          its own request flow and its own confirmation banner. */}
+      <UniversalRateCard rate={rate} loading={loading} />
 
       {/* Provider balances (today: Nuvion Liquidity) -- shown ABOVE the
           wallets table and rendered through their own currency-aware

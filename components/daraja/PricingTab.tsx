@@ -38,7 +38,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/ui/status_badge";
 import { formatDateTime } from "@/lib/format";
-import { formatOpsMoney, UNKNOWN_AMOUNT } from "@/lib/darajaMoney";
+// `formatOpsRate` used to be a local `rateText` here. The Treasury screen now
+// renders the same universal rate (its `rate.universal` comes from the same
+// backend `_rate()`), so the formatter moved to lib/darajaMoney.ts rather than
+// being spelled a second time -- two spellings of one number is how the two
+// screens end up disagreeing. Imported under the old local name so every call
+// site below reads exactly as it did.
+import { formatOpsRate as rateText } from "@/lib/darajaMoney";
 import {
   createActionRequest,
   extractOpsErrorMessage,
@@ -58,18 +64,6 @@ const NO_EXPIRY =
   + "moves later, this merchant stays on this number, on every top-up, "
   + "expense and payout quote, until someone grants them another rate or "
   + "clears them back to universal.";
-
-/**
- * "TZS 2,700 per USD", as text.
- *
- * `formatOpsMoney` and nothing else -- no Number(), no toFixed(). The unit is
- * appended only to a figure that could actually be read, because "— per USD"
- * reads as a rate rather than as a missing one.
- */
-function rateText(value: string | null | undefined): string {
-  const shown = formatOpsMoney(value);
-  return shown === UNKNOWN_AMOUNT ? shown : `${shown} per USD`;
-}
 
 /**
  * The underwater flag, on its own, for the merchant detail page to render

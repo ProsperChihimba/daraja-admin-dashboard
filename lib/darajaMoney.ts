@@ -170,3 +170,29 @@ export function formatOpsMoneyAs(
   const digits = opsAmountDigits(value);
   return digits === null ? UNKNOWN_AMOUNT : `${currency} ${digits}`;
 }
+
+/**
+ * "TZS 2,750 per USD" -- a USD->TZS conversion rate as the backend stated it,
+ * or `UNKNOWN_AMOUNT`.
+ *
+ * ONE SPELLING OF THE RATE, for the whole console. The merchant Pricing tab
+ * and the Treasury screen both render `rate.universal`, and both take it from
+ * the same `_rate()` on the backend (dashboard/views/treasury.py's
+ * `_rate_block` says so in as many words); two formatters here would be two
+ * spellings of one number, and the screen that disagreed would be the one
+ * somebody trusted.
+ *
+ * `formatOpsMoney` and nothing else underneath -- no `Number()`, no
+ * `parseFloat()`, no `toFixed()`. A rate is DecimalField(20,6), so a browser
+ * that rounded it would be rounding the price of every top-up on the
+ * platform.
+ *
+ * The unit is appended only to a figure that could actually be read: "— per
+ * USD" reads as a rate rather than as a missing one.
+ */
+export function formatOpsRate(
+  value: string | number | null | undefined,
+): string {
+  const shown = formatOpsMoney(value);
+  return shown === UNKNOWN_AMOUNT ? shown : `${shown} per USD`;
+}

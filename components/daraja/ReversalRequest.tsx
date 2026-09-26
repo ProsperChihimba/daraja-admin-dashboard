@@ -41,21 +41,18 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   createActionRequest,
   extractOpsErrorMessage,
+  MIN_EVIDENCE,
 } from "@/lib/darajaActions";
 
 export const LIPA_REVERSE = "lipa.reverse";
 export const CARDTOPUP_REVERSE = "cardtopup.reverse";
 
-/**
- * dashboard/actions/reversals.py MIN_EVIDENCE.
- *
- * Mirrored here so a short statement is caught in front of the person who
- * typed it, with the input still on screen, instead of coming back as a 400
- * that closes nothing but loses their typing. The backend remains the
- * authority -- this never relaxes it, and a statement that passes here and
- * is still refused there is shown as the refusal it is.
- */
-export const MIN_EVIDENCE = 20;
+// The statement floor was defined here while this was the console's only
+// typed-statement screen. `pricing.set_universal_rate` is the second one, so
+// the constant moved to lib/darajaActions.ts -- one floor, the way
+// dashboard/actions/statements.py holds one on the backend. Still exported
+// from here so nothing that already reads it from this module breaks.
+export { MIN_EVIDENCE };
 
 type ReversalKind = "lipa" | "cardtopup";
 

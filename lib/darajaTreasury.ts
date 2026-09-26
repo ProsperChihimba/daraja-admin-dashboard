@@ -82,9 +82,55 @@ export type ProviderBalanceRow = {
   account_ref: string;
 };
 
+/**
+ * The platform's own price for a dollar, and who is NOT on it.
+ *
+ * Field-for-field from dashboard/views/treasury.py's `_rate_block`:
+ *
+ *   universal, note, set_at, override_holders, below_universal
+ *
+ * `universal` is the DecimalField(20,6)-as-string `_rate()` renders
+ * ("2750.000000"), so it goes to `formatOpsRate` untouched -- never
+ * `Number()`/`parseFloat()`/`toFixed()`, because rounding this number in a
+ * browser is rounding the price of every top-up, expense and payout quote on
+ * the platform.
+ *
+ * `universal`/`note`/`set_at` are ALL null together, and only in one state: no
+ * universal rate has ever been set. That is not an error and must not render as
+ * a zero -- with no rate configured `rate_for` raises `NoRateConfigured` and
+ * nothing can price anything, which is precisely what someone would open this
+ * screen to diagnose. `note` may also be an empty STRING on a real rate
+ * (`ConversionRate.note` is blank=True, and `set_conversion_rate --note`
+ * defaults to ""), so read it with `||`, not `??`.
+ *
+ * `override_holders` counts merchants on a live `EmployerConversionRate`;
+ * `below_universal` counts how many OF THOSE sit below `universal`. Both come
+ * from the same `override_holders()`/`holders_below()` that
+ * `pricing.set_universal_rate`'s preview and the `client_rate_below_universal`
+ * alert use, so this screen can never disagree with either. `below_universal`
+ * is 0 when there is no universal rate at all -- nothing to compare an override
+ * against -- not because nobody is underwater. NEITHER IS RECOMPUTED HERE.
+ */
+export type TreasuryRate = {
+  universal: string | null;
+  note: string | null;
+  set_at: string | null;
+  override_holders: number;
+  below_universal: number;
+};
+
 export type TreasuryResponse = {
   wallets: TreasuryWallet[];
   providers: ProviderBalanceRow[];
+  /**
+   * Typed non-optional (the deployed backend sends it) but read as though it
+   * might be absent -- the same treatment, for the same reason, as
+   * `MerchantDetail.rate`. A console deployed ahead of the backend that added
+   * this key must SAY it cannot read the rate rather than draw the card of a
+   * platform with no rate configured: that would be a claim about what every
+   * merchant is charged.
+   */
+  rate: TreasuryRate;
 };
 
 export const TREASURY_PATH = "/treasury/";

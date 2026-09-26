@@ -10,6 +10,28 @@
 import darajaApi from "@/lib/darajaApi";
 import type { Paginated } from "@/types/daraja";
 
+/**
+ * `dashboard/actions/statements.py` MIN_EVIDENCE -- the floor on a typed
+ * justification, mirrored client-side.
+ *
+ * ONE COPY FOR THE WHOLE CONSOLE, and it lives here because this is the module
+ * every typed-statement request goes out through. It started in
+ * components/daraja/ReversalRequest.tsx, which was the only screen that asked
+ * for a statement; `pricing.set_universal_rate` is the second, and the backend
+ * hoisted its own parser into `statements.py` for exactly this reason -- "a
+ * second copy here would be a second minimum length, and the two would drift".
+ * A console whose reversal screen demanded 20 characters while its rate screen
+ * demanded something else would be that drift, on the side of the wire no test
+ * compares against the other.
+ *
+ * Mirrored at all so a short statement is caught in front of the person who
+ * typed it, with their paragraph still on screen, instead of coming back as a
+ * 400 that loses it. The backend remains the authority -- this never relaxes
+ * it, and a statement that passes here and is still refused there is shown as
+ * the refusal it is.
+ */
+export const MIN_EVIDENCE = 20;
+
 export type ActionState = "pending" | "executed" | "refused" | "expired" | "failed";
 
 /**
