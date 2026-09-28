@@ -102,11 +102,45 @@ export type MetricsNotes = {
   card_creation_cost_usd: string;
 };
 
+/**
+ * How far back the LEDGER can actually see, and whether each window is inside
+ * it.
+ *
+ * `deposits_*`, `payouts_*` and `fee_revenue_tzs` are read from the ledger,
+ * which begins at the float opening (2026-09-11 in production). Before that
+ * Daraja ran on Tembo -- revenue included -- and none of that traffic is in
+ * these books, so those five figures come back as a truthful 0 for an earlier
+ * window. On screen, beside a non-zero registrations count, that reads as "we
+ * moved no money that month": August 2026 answers 0 when it really held 199
+ * payouts, 46,043,797 moved and 407,480 in fees.
+ *
+ * So the screen must render `missing_before` INSTEAD of those five figures
+ * whenever `complete` is false. `figures` names exactly which keys are
+ * affected, so this client never keeps its own copy of that list -- the
+ * backend owns it and they cannot drift.
+ *
+ * `since` is null when no float opening has been booked: a fresh system with
+ * no Tembo era behind it, where every window is covered and no caveat is
+ * justified.
+ */
+export type MetricsLedgerCoverage = {
+  complete: boolean;
+  missing_before: string | null;
+};
+
+export type MetricsLedger = {
+  since: string | null;
+  figures: string[];
+  window: MetricsLedgerCoverage;
+  compared_to: MetricsLedgerCoverage;
+};
+
 export type MetricsResponse = {
   window: MetricsWindow;
   compared_to: MetricsWindow;
   current: MetricsFigures;
   previous: MetricsFigures;
+  ledger: MetricsLedger;
   notes: MetricsNotes;
 };
 

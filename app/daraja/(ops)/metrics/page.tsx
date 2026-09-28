@@ -47,7 +47,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { ErrorState, LoadingBlock } from "@/components/common/PageStates";
 import { Card, CardContent } from "@/components/ui/card";
 import { DateRangeFilter, EMPTY_RANGE, type DateRange } from "@/components/common/DateRangeFilter";
-import { formatOpsMoney, formatOpsMoneyAs } from "@/lib/darajaMoney";
+import { UNKNOWN_AMOUNT, formatOpsMoney, formatOpsMoneyAs } from "@/lib/darajaMoney";
 import { useDarajaResource } from "@/lib/darajaAuth";
 import { METRICS_PATH, type MetricsResponse } from "@/lib/darajaMetrics";
 
@@ -104,6 +104,7 @@ function MoneyStatCard({
   previous,
   details,
   note,
+  unavailable,
 }: {
   title: string;
   currency: "TZS" | "USD";
@@ -111,10 +112,29 @@ function MoneyStatCard({
   previous: string;
   details?: CountDetail[];
   note?: string;
+  /**
+   * Set when the ledger cannot see this window. The card then shows WHY
+   * instead of the figure -- never the figure with a footnote. The backend
+   * returns a truthful 0 for these keys before the float opening, and a 0
+   * sitting beside a non-zero registrations count reads as "we moved no money
+   * that month" when Daraja was simply running on Tembo at the time.
+   */
+  unavailable?: string | null;
 }) {
   const format = (value: string) =>
     currency === "USD" ? formatOpsMoneyAs("USD", value) : formatOpsMoney(value);
   const change = percentChange(previous, current);
+  if (unavailable) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col gap-1.5 py-4">
+          <div className="text-sm font-medium text-text-muted">{title}</div>
+          <div className="text-2xl font-semibold text-text-faint">{UNKNOWN_AMOUNT}</div>
+          <div className="text-xs text-text-muted">{unavailable}</div>
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card>
       <CardContent className="flex flex-col gap-1.5 py-4">
@@ -224,6 +244,21 @@ export default function MetricsPage() {
 
   const current = data?.current;
   const previous = data?.previous;
+
+  // WHAT THE LEDGER CANNOT SEE, straight from the backend. `ledger.figures`
+  // names the affected keys, so this screen never keeps its own copy of that
+  // list and the two cannot drift. When the window predates the float opening
+  // those figures come back as a truthful 0 -- which on screen, beside a
+  // non-zero registrations count, reads as "we moved no money that month".
+  // August 2026 answers 0 and really held 199 payouts and 407,480 in fees,
+  // all of it on Tembo before this ledger existed.
+  const ledger = data?.ledger;
+  const ledgerGap =
+    ledger && !ledger.window.complete && ledger.window.missing_before
+      ? `No ledger data before ${ledger.window.missing_before} — Daraja ran on Tembo until then.`
+      : null;
+  const hides = (key: string) =>
+    ledgerGap && ledger?.figures.includes(key) ? ledgerGap : null;
   const notes = data?.notes;
 
   return (
@@ -239,6 +274,17 @@ export default function MetricsPage() {
           Showing {data.window.from} to {data.window.to} -- compared to {data.compared_to.from} to{" "}
           {data.compared_to.to}.
         </p>
+      ) : null}
+
+      {/* Said once at the top as well as on each affected card: a reader who
+          scans the figures should not have to notice three identical
+          footnotes to understand that a third of the screen is dark. */}
+      {ledgerGap ? (
+        <div className="mb-4 rounded-card border border-border-soft border-l-4 border-l-warning-bg bg-surface px-3 py-2 text-xs text-text-muted">
+          {ledgerGap} Deposits, payouts and fee revenue are read from the
+          ledger, so they cannot be shown for this window. Registrations,
+          merchants and card figures are unaffected.
+        </div>
       ) : null}
 
       {/* Only a failure with nothing to show takes the whole area -- a
@@ -260,6 +306,7 @@ export default function MetricsPage() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <MoneyStatCard
                 title="Deposits"
+                unavailable={hides("deposits_tzs")}
                 currency="TZS"
                 current={current.deposits_tzs}
                 previous={previous.deposits_tzs}
@@ -273,6 +320,7 @@ export default function MetricsPage() {
               />
               <MoneyStatCard
                 title="Payouts"
+                unavailable={hides("payouts_tzs")}
                 currency="TZS"
                 current={current.payouts_tzs}
                 previous={previous.payouts_tzs}
@@ -331,6 +379,7 @@ export default function MetricsPage() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <MoneyStatCard
                 title="Fee revenue"
+                unavailable={hides("fee_revenue_tzs")}
                 currency="TZS"
                 current={current.fee_revenue_tzs}
                 previous={previous.fee_revenue_tzs}
