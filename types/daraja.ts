@@ -229,6 +229,31 @@ export interface EntryRow {
   movement_id: string;
 }
 
+/** One wallet in an employer's tree: GET /employers/<id>/wallets/.
+ *
+ *  `balance` IS THE RAIL'S, not the CollectionAccount.balance mirror column.
+ *  That column disagreed with the ledger for 19 of production's 70 active
+ *  wallets, almost always reading 0.00 for a merchant holding real money, so
+ *  the backend now resolves it through rails.spendable_balance. */
+export interface EmployerWalletRow {
+  account_id: string;
+  account_no: string | null;
+  balance: string;
+  active: boolean;
+  branch: { branch_id: string; name: string; active: boolean } | null;
+}
+
+/** An employer's wallets: the main one, plus one per branch. A merchant with
+ *  branches holds several wallets, and each has its own balance and its own
+ *  statement -- there is no such thing as one running balance across them. */
+export interface EmployerWalletTree {
+  employer_id: string;
+  business_name: string | null;
+  main_wallet: EmployerWalletRow | null;
+  branch_wallets: EmployerWalletRow[];
+  total_balance: string;
+}
+
 /** One ledger account's statement: GET /ledger/accounts/<id>/entries/.
  *
  *  THE ACCOUNT-FIRST VIEW THE MOVEMENTS LIST CANNOT BE. Filtering movements by
