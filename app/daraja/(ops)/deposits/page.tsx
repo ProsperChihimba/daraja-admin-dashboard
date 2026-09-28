@@ -25,6 +25,14 @@
 // the number the design says should have surfaced the 2026-09-16 incident, so
 // it has to be legible without opening the queue. One page-level request
 // serves both the label and the panel; the panel does not fetch again.
+// NO NAMED EXPORTS FROM THIS FILE. A Next.js App Router `page.tsx` may export
+// only its default page plus a fixed set of route fields (metadata, dynamic,
+// revalidate and friends); anything else fails the build outright with
+// `"<name>" is not a valid Page export field`. Several helpers here were
+// exported for tests that were never written -- the repo has no test runner --
+// and that broke `next build` for the whole app, not just this screen. If one
+// of them is ever needed elsewhere, MOVE it to a sibling module and import it
+// back; do not re-export it from here.
 "use client";
 import * as React from "react";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -61,7 +69,7 @@ import type {
  * Exported so the mapping can be asserted directly rather than inferred from
  * rendered output.
  */
-export function intentsPath(state: string): string {
+function intentsPath(state: string): string {
   return state ? `/deposits/intents/?state=${encodeURIComponent(state)}` : "/deposits/intents/";
 }
 
@@ -328,7 +336,7 @@ function IntentsQueue() {
  * byte-identical to the code that ships, which is the precedent Task 8 set and
  * its review accepted.
  */
-export function DepositsScreen({ initialTab = "unmatched" }: { initialTab?: string }) {
+function DepositsScreen({ initialTab = "unmatched" }: { initialTab?: string }) {
   const [tab, setTab] = React.useState(initialTab);
 
   // Fetched at page level, unconditionally, so the queue's SIZE is visible

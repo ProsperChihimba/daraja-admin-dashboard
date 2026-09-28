@@ -41,6 +41,14 @@
 // inside `useDarajaResource`, which the hook-level reset masks but does not
 // clear. Removing it would not reintroduce the bug; leaving it does not hide
 // one.
+// NO NAMED EXPORTS FROM THIS FILE. A Next.js App Router `page.tsx` may export
+// only its default page plus a fixed set of route fields (metadata, dynamic,
+// revalidate and friends); anything else fails the build outright with
+// `"<name>" is not a valid Page export field`. Several helpers here were
+// exported for tests that were never written -- the repo has no test runner --
+// and that broke `next build` for the whole app, not just this screen. If one
+// of them is ever needed elsewhere, MOVE it to a sibling module and import it
+// back; do not re-export it from here.
 "use client";
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
@@ -57,7 +65,7 @@ import { useCursorPages } from "@/components/daraja/CursorList";
 import { useDarajaResource } from "@/lib/darajaAuth";
 import type { LedgerKindsPayload, MovementRow as MovementRowData } from "@/types/daraja";
 
-export interface MovementFilters {
+interface MovementFilters {
   kind: string;
   reference: string;
   accountId: string;
@@ -82,7 +90,7 @@ export interface MovementFilters {
  * list -- and throwing away loaded pages -- for a filter the operator never
  * set.
  */
-export function movementsPath(filters: MovementFilters): string {
+function movementsPath(filters: MovementFilters): string {
   const query = new URLSearchParams();
   if (filters.kind) query.set("kind", filters.kind);
   if (filters.reference) query.set("reference", filters.reference);
@@ -210,7 +218,7 @@ function MovementsList({ path }: { path: string }) {
  * router context (`useSearchParams` only exists inside it). The default export
  * below is the page; this is the page's whole body.
  */
-export function MovementsExplorer({ initialAccountId = "" }: { initialAccountId?: string }) {
+function MovementsExplorer({ initialAccountId = "" }: { initialAccountId?: string }) {
   const [kind, setKind] = React.useState("");
   const [accountIdInput, setAccountIdInput] = React.useState(initialAccountId);
   const [accountId, setAccountId] = React.useState(initialAccountId);

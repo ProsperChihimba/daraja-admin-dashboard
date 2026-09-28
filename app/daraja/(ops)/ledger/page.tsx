@@ -10,6 +10,14 @@
 // out the accounts table, and a slow accounts query must not hide the health
 // strip. Each gets its own ErrorState, following the pattern in
 // app/daraja/(ops)/merchants/page.tsx.
+// NO NAMED EXPORTS FROM THIS FILE. A Next.js App Router `page.tsx` may export
+// only its default page plus a fixed set of route fields (metadata, dynamic,
+// revalidate and friends); anything else fails the build outright with
+// `"<name>" is not a valid Page export field`. Several helpers here were
+// exported for tests that were never written -- the repo has no test runner --
+// and that broke `next build` for the whole app, not just this screen. If one
+// of them is ever needed elsewhere, MOVE it to a sibling module and import it
+// back; do not re-export it from here.
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -285,10 +293,13 @@ function stalenessState(
  * independently of everything else in the position payload) and is not
  * rendered as an empty strip when it is -- `last_runs_error` explains why.
  *
- * Exported, with `lastRunState` beside it, so the states can be driven and
- * asserted against the real component rather than a copy of it.
+ * Kept beside `lastRunState` so the states and the component that renders
+ * them stay together. NOT exported: a page.tsx may export only the default
+ * page (see the note at the top of this file). If these are ever driven from
+ * a test, move both to a sibling module rather than re-exporting them here --
+ * the repo has no test runner configured today.
  */
-export function lastRunState(run: CommandRunInfo): {
+function lastRunState(run: CommandRunInfo): {
   variant: StatusVariant;
   label: string;
 } {
@@ -298,7 +309,7 @@ export function lastRunState(run: CommandRunInfo): {
   return SEVERITY_RANK[stale.variant] > SEVERITY_RANK[tick.variant] ? stale : tick;
 }
 
-export function LastRuns({ position }: { position: LedgerPosition }) {
+function LastRuns({ position }: { position: LedgerPosition }) {
   if (position.last_runs_error) {
     return (
       <div className="mt-3 rounded-card border border-border-soft border-l-4 border-l-warning-bg bg-surface p-3 text-xs text-text-muted">
