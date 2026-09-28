@@ -686,13 +686,25 @@ export interface WalletStatementLine {
   debitOrCredit: string | null;
   amountCredited: string;
   amountDebited: string;
-  /** The running balance AFTER this line. */
+  /** The running balance AFTER this line. Kept as the original name so
+   *  nothing that already reads it breaks; `balance_after` is the same
+   *  number under the name that pairs with `balance_before`. */
   balance: string;
+  /** The balance BEFORE this line, and after it. The backend derives
+   *  `balance_before` from `balance_after` minus the row's own signed
+   *  amount -- never a second query -- and pins two invariants on them:
+   *  before + movement == after, and each row's before == the next (older)
+   *  row's after. Read them in that order; do not recompute either here. */
+  balance_before: string;
+  balance_after: string;
   registered: string;
   /** branches/views/statement_utils.py::classify's best-effort label
    *  ("transfer_out", "transfer_in", "refund", "reversal", "fee", ...) --
    *  free text, not a closed enum the frontend should validate against. */
   kind: string;
+  /** Who the money came from or went to, when the ledger could name them.
+   *  Null on the legacy branch and on rows with no identifiable party. */
+  counterparty?: string | null;
 }
 
 /** The `summary` object WalletStatement.get attaches to the paginated
@@ -705,6 +717,14 @@ export interface WalletStatementSummary {
   money_out: string;
   total_fees: string;
 }
+
+/** WHICH BOOK ANSWERED. A migrated wallet's lines come from the ledger; an
+ *  unmigrated one's still come from the legacy CollectionAccountTransaction
+ *  table, because that wallet genuinely still pays through Tembo. The two
+ *  cover different spans of history, so an operator comparing two merchants
+ *  has to be able to see which they are reading. The row shape is identical
+ *  either way -- this is the only thing that distinguishes them. */
+export type WalletStatementSource = "ledger" | "tembo";
 
 /**
  * The `window` object WalletStatement.get attaches alongside `summary` --
@@ -730,4 +750,5 @@ export interface WalletStatementWindow {
 export interface WalletStatementPage extends CursorPaged<WalletStatementLine> {
   summary: WalletStatementSummary;
   window: WalletStatementWindow;
+  source: WalletStatementSource;
 }

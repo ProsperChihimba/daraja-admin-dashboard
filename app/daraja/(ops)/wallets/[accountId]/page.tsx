@@ -88,11 +88,23 @@ const statementColumns: Column<WalletStatementLine>[] = [
     header: "Kind",
     render: (l) => <StatusBadge variant="neutral">{l.kind}</StatusBadge>,
   },
+  // BEFORE -> movement -> AFTER, in that reading order. A single balance
+  // column states only where the account ENDED and leaves the reader to infer
+  // where it started from the row above -- which fails at the top of the
+  // window, where there is no row above and the starting point is the one
+  // thing the reader does not know. Both figures are computed and checked by
+  // the backend (before + movement == after, and each row's before == the
+  // next row's after); nothing is subtracted here, because arithmetic on
+  // money is not this screen's job.
+  {
+    key: "balance_before",
+    header: "Before",
+    className: "text-text-muted",
+    render: (l) => formatOpsMoney(l.balance_before),
+  },
   { key: "amountCredited", header: "Credited", render: (l) => formatOpsMoney(l.amountCredited) },
   { key: "amountDebited", header: "Debited", render: (l) => formatOpsMoney(l.amountDebited) },
-  // The running balance AFTER this line -- DecimalField(50,5), same column
-  // shape as the wallet's own `balance` above it.
-  { key: "balance", header: "Balance", render: (l) => formatOpsMoney(l.balance) },
+  { key: "balance_after", header: "After", render: (l) => formatOpsMoney(l.balance_after) },
   {
     key: "transaction_id",
     header: "Ref",
@@ -115,6 +127,7 @@ function StatementSection({ accountId }: { accountId: string }) {
   // result of three "Load more" clicks.
   const summary = page?.summary;
   const window_ = page?.window;
+  const source = page?.source;
 
   const showLoadMore = Boolean(nextCursor) || (loading && rows.length > 0);
 
@@ -126,7 +139,20 @@ function StatementSection({ accountId }: { accountId: string }) {
 
       <Card className="mb-4">
         <CardHeader>
-          <CardTitle>Summary</CardTitle>
+          {/*
+            WHICH BOOK ANSWERED, beside the title. A migrated wallet's lines
+            are the ledger's; an unmigrated one's are the legacy table's,
+            because that wallet still pays through Tembo. The rows look
+            identical either way, so without this badge an operator comparing
+            two merchants has no way to know one statement reaches back
+            further than the other.
+          */}
+          <div className="flex items-center gap-2">
+            <CardTitle>Summary</CardTitle>
+            {source ? (
+              <StatusBadge variant="neutral">{source}</StatusBadge>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent>
           {/*
