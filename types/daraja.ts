@@ -218,6 +218,43 @@ export interface EntryRow {
   created: string;
   movement_kind: string;
   reference: string;
+  /** The account's balance BEFORE this entry and after it. The backend walks
+   *  every entry from the ACCOUNT'S FIRST, not the window's, so a windowed
+   *  statement opens at the true balance rather than restarting at zero. Two
+   *  invariants are pinned server-side: before + amount == after, and each
+   *  row's before == the next (older) row's after. Do not recompute either. */
+  balance_before: string;
+  balance_after: string;
+  direction: "credit" | "debit";
+  movement_id: string;
+}
+
+/** One ledger account's statement: GET /ledger/accounts/<id>/entries/.
+ *
+ *  THE ACCOUNT-FIRST VIEW THE MOVEMENTS LIST CANNOT BE. Filtering movements by
+ *  account answers "what touched this account" and shows BOTH legs of each
+ *  movement -- the account's own side beside its counterparty's -- which can
+ *  never carry a running balance, because the two legs move two accounts in
+ *  opposite directions. A balance belongs to ONE account's legs in order.
+ *
+ *  Served whole: `next`/`previous` are always null. */
+export interface LedgerAccountStatement {
+  results: EntryRow[];
+  next: string | null;
+  previous: string | null;
+  account: {
+    account_id: string;
+    kind: string;
+    /** No CollectionAccount behind it: pool, revenue, float, suspense. */
+    is_house_account: boolean;
+  };
+  summary: {
+    opening_balance: string;
+    closing_balance: string;
+    money_in: string;
+    money_out: string;
+  };
+  window: { start_date: string | null; end_date: string | null };
 }
 
 export interface DepositRow {

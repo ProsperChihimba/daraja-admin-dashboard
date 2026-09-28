@@ -63,7 +63,14 @@ import { DateRangeFilter, EMPTY_RANGE, type DateRange } from "@/components/commo
 import { MovementRow } from "@/components/daraja/MovementRow";
 import { useCursorPages } from "@/components/daraja/CursorList";
 import { useDarajaResource } from "@/lib/darajaAuth";
-import type { LedgerKindsPayload, MovementRow as MovementRowData } from "@/types/daraja";
+import { formatOpsMoney } from "@/lib/darajaMoney";
+import { formatDateTime } from "@/lib/format";
+import { DataTable, type Column } from "@/components/common/DataTable";
+import { StatusBadge } from "@/components/ui/status_badge";
+import type {
+  LedgerAccountStatement, EntryRow, LedgerKindsPayload,
+  MovementRow as MovementRowData,
+} from "@/types/daraja";
 
 interface MovementFilters {
   kind: string;
@@ -214,6 +221,103 @@ function MovementsList({ path }: { path: string }) {
 }
 
 /**
+ * ONE ACCOUNT, AS A STATEMENT: before -> movement -> after.
+ *
+ * Shown INSTEAD of the movement list the moment an account is named, because
+ * the two answer different questions. The movement list is movement-first: it
+ * shows both legs of everything that touched the account, the account's own
+ * side beside its counterparty's, and it can never carry a running balance --
+ * two legs of one movement move two accounts in opposite directions. A balance
+ * is a property of ONE account's own legs in order.
+ *
+ * Every figure here is the backend's. `balance_before` is derived there from
+ * the same number as `balance_after`, over the ACCOUNT'S whole history rather
+ * than the window's, so a windowed statement opens at the true balance instead
+ * of restarting at zero. Nothing is summed or subtracted in this component.
+ */
+const statementColumns: Column<EntryRow>[] = [
+  { key: "created", header: "When", render: (e) => formatDateTime(e.created) },
+  {
+    key: "movement_kind",
+    header: "Type",
+    render: (e) => <StatusBadge variant="neutral">{e.movement_kind}</StatusBadge>,
+  },
+  {
+    key: "reference",
+    header: "Reference",
+    className: "whitespace-normal",
+    render: (e) => <span className="font-mono text-xs">{e.reference || "—"}</span>,
+  },
+  {
+    key: "balance_before",
+    header: "Before",
+    className: "text-text-muted",
+    render: (e) => formatOpsMoney(e.balance_before),
+  },
+  {
+    key: "amount",
+    header: "Movement",
+    render: (e) => (
+      <span className={e.direction === "credit" ? "text-success" : "text-danger"}>
+        {formatOpsMoney(e.amount)}
+      </span>
+    ),
+  },
+  { key: "balance_after", header: "After", render: (e) => formatOpsMoney(e.balance_after) },
+];
+
+function AccountStatement({ path }: { path: string }) {
+  const { data, loading, error, refetch } =
+    useDarajaResource<LedgerAccountStatement>(path);
+
+  if (error && !data) return <ErrorState message={error} onRetry={refetch} />;
+  if (loading && !data) return <LoadingBlock />;
+  if (!data) return null;
+
+  const { summary, account } = data;
+  return (
+    <>
+      {error ? (
+        <div className="mb-3">
+          <ErrorState message={error} onRetry={refetch} />
+        </div>
+      ) : null}
+
+      <div className="mb-4 rounded-card border border-border-soft bg-surface px-4 py-3">
+        <div className="mb-2 flex items-center gap-2 text-xs text-text-muted">
+          <span className="font-mono">{account.account_id.slice(0, 12)}</span>
+          <StatusBadge variant="neutral">{account.kind}</StatusBadge>
+          {account.is_house_account ? (
+            <StatusBadge variant="neutral">house account</StatusBadge>
+          ) : null}
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {([
+            ["Opening", summary.opening_balance],
+            ["Money in", summary.money_in],
+            ["Money out", summary.money_out],
+            ["Closing", summary.closing_balance],
+          ] as const).map(([label, value]) => (
+            <div key={label}>
+              <div className="text-xs text-text-muted">{label}</div>
+              <div className="text-text">{formatOpsMoney(value)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {data.results.length === 0 ? (
+        <EmptyState message="This account had no movements in that window." />
+      ) : (
+        <DataTable columns={statementColumns} rows={data.results}
+                   rowKey={(e) => e.entry_id} />
+      )}
+    </>
+  );
+}
+
+
+/**
  * Exported so a test harness can mount the real screen without Next's app
  * router context (`useSearchParams` only exists inside it). The default export
  * below is the page; this is the page's whole body.
@@ -251,11 +355,34 @@ function MovementsExplorer({ initialAccountId = "" }: { initialAccountId?: strin
     [kind, reference, accountId, dates.after, dates.before],
   );
 
+  // NAMING AN ACCOUNT CHANGES THE QUESTION, so it changes the view. Without
+  // one, "what has the ledger been doing" -- movement-first, both legs of
+  // each. With one, "what has this account been doing" -- that account's own
+  // legs, in order, with the running balance the movement list structurally
+  // cannot carry.
+  //
+  // `kind` and `reference` do NOT apply to the statement, and that is on
+  // purpose rather than an omission: a running balance filtered to some of an
+  // account's movements is a balance the account never held. The filters stay
+  // on screen and drive the movement list the moment the account box clears.
+  const statementPath = React.useMemo(() => {
+    if (!accountId) return null;
+    const query = new URLSearchParams();
+    if (dates.after) query.set("start_date", dates.after);
+    if (dates.before) query.set("end_date", dates.before);
+    const qs = query.toString();
+    return `/ledger/accounts/${encodeURIComponent(accountId)}/entries/${qs ? `?${qs}` : ""}`;
+  }, [accountId, dates.after, dates.before]);
+
   return (
     <>
       <PageHeader
-        title="Movements"
-        subtitle="Every ledger movement, newest first, with both sides of each one."
+        title={statementPath ? "Account statement" : "Movements"}
+        subtitle={
+          statementPath
+            ? "One account's own legs, newest first, with the balance before and after each."
+            : "Every ledger movement, newest first, with both sides of each one."
+        }
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -283,7 +410,11 @@ function MovementsExplorer({ initialAccountId = "" }: { initialAccountId?: strin
           than the fix: `useCursorPages` resets itself on a path change and
           `useDarajaResource` keys its held response by path, so removing this
           would not reintroduce the stale-rows bug -- see the file header. */}
-      <MovementsList key={path} path={path} />
+      {statementPath ? (
+        <AccountStatement key={statementPath} path={statementPath} />
+      ) : (
+        <MovementsList key={path} path={path} />
+      )}
     </>
   );
 }
