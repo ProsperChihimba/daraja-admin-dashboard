@@ -301,7 +301,7 @@ export default function MetricsPage() {
   const ledgerGap = cover?.entirely_before
     ? `No ledger data before ${cover.missing_before} — Daraja ran on Tembo until then.`
     : partialFrom
-      ? `${affectedPhrase} count from ${partialFrom} — the ledger began then, and Daraja ran on Tembo before it.`
+      ? `${affectedPhrase}: counted from ${partialFrom} — the ledger began then, and Daraja ran on Tembo before it.`
       : null;
   const notes = data?.notes;
 
@@ -329,8 +329,14 @@ export default function MetricsPage() {
       {ledgerGap ? (
         <div className="mb-4 rounded-card border border-border-soft border-l-4 border-l-warning-bg bg-surface px-3 py-2 text-xs text-text-muted">
           {ledgerGap}
+          {/* No verb agreement here on purpose. The figure names are a mix of
+              plural ("Deposits", "Payouts") and singular ("Fee revenue"), and
+              the count of NAMES says nothing about the grammar of the words --
+              one name, "Deposits", was producing "Deposits is read from the
+              ledger, so it cannot be shown". A colon sidesteps it entirely and
+              stays correct for any subset the backend sends. */}
           {cover?.entirely_before
-            ? ` ${affectedPhrase} ${affected.length === 1 ? "is" : "are"} read from the ledger, so ${affected.length === 1 ? "it" : "they"} cannot be shown for this window.`
+            ? ` Read from the ledger, so not shown for this window: ${affectedPhrase}.`
             : ""}{" "}
           Every other figure is unaffected.
         </div>
