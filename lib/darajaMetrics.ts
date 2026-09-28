@@ -124,7 +124,21 @@ export type MetricsNotes = {
  * justified.
  */
 export type MetricsLedgerCoverage = {
+  /** The whole window is inside the ledger. */
   complete: boolean;
+  /**
+   * The window ends BEFORE the ledger begins, so its ledger figures mean
+   * nothing and the screen hides them. Distinct from `complete: false`, which
+   * a STRADDLING window also carries -- and straddling is the common case,
+   * since any calendar month containing the float opening straddles it.
+   */
+  entirely_before: boolean;
+  /**
+   * For a straddling window: the date the figures actually start from. They
+   * are real but understated, so the screen SHOWS them with this as a note.
+   * Null when the window is complete or entirely before.
+   */
+  covers_from: string | null;
   missing_before: string | null;
 };
 

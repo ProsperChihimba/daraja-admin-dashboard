@@ -253,12 +253,29 @@ export default function MetricsPage() {
   // August 2026 answers 0 and really held 199 payouts and 407,480 in fees,
   // all of it on Tembo before this ledger existed.
   const ledger = data?.ledger;
-  const ledgerGap =
-    ledger && !ledger.window.complete && ledger.window.missing_before
-      ? `No ledger data before ${ledger.window.missing_before} — Daraja ran on Tembo until then.`
-      : null;
+  const cover = ledger?.window;
+
+  // HIDE only when the ledger cannot see the window AT ALL. A window that
+  // merely STRADDLES the horizon -- which every calendar month containing the
+  // float opening does, including the default view -- has real figures that
+  // are simply understated, and hiding those would be as wrong as the
+  // confident zero this whole thing exists to remove.
   const hides = (key: string) =>
-    ledgerGap && ledger?.figures.includes(key) ? ledgerGap : null;
+    cover?.entirely_before && ledger?.figures.includes(key)
+      ? `No ledger data before ${cover.missing_before} — Daraja ran on Tembo until then.`
+      : null;
+
+  // Shown beside a figure that is real but partial.
+  const partialFrom = cover && !cover.entirely_before ? cover.covers_from : null;
+  const partialNote = partialFrom ? `counts from ${partialFrom}` : undefined;
+  const partial = (key: string) =>
+    partialNote && ledger?.figures.includes(key) ? partialNote : undefined;
+
+  const ledgerGap = cover?.entirely_before
+    ? `No ledger data before ${cover.missing_before} — Daraja ran on Tembo until then.`
+    : partialFrom
+      ? `Deposits, payouts and fee revenue count from ${partialFrom} — the ledger began then, and Daraja ran on Tembo before it.`
+      : null;
   const notes = data?.notes;
 
   return (
@@ -281,9 +298,11 @@ export default function MetricsPage() {
           footnotes to understand that a third of the screen is dark. */}
       {ledgerGap ? (
         <div className="mb-4 rounded-card border border-border-soft border-l-4 border-l-warning-bg bg-surface px-3 py-2 text-xs text-text-muted">
-          {ledgerGap} Deposits, payouts and fee revenue are read from the
-          ledger, so they cannot be shown for this window. Registrations,
-          merchants and card figures are unaffected.
+          {ledgerGap}
+          {cover?.entirely_before
+            ? " Deposits, payouts and fee revenue are read from the ledger, so they cannot be shown for this window."
+            : ""}{" "}
+          Registrations, merchants and card figures are unaffected.
         </div>
       ) : null}
 
@@ -307,6 +326,7 @@ export default function MetricsPage() {
               <MoneyStatCard
                 title="Deposits"
                 unavailable={hides("deposits_tzs")}
+                note={partial("deposits_tzs")}
                 currency="TZS"
                 current={current.deposits_tzs}
                 previous={previous.deposits_tzs}
@@ -331,7 +351,12 @@ export default function MetricsPage() {
                     previous: previous.payouts_count,
                   },
                 ]}
-                note="Includes the fee charged on each payout -- do not add this to fee revenue below, that double-counts the fee."
+                note={[
+                  partial("payouts_tzs"),
+                  "Includes the fee charged on each payout -- do not add this to fee revenue below, that double-counts the fee.",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
               />
               <MoneyStatCard
                 title="Card volume"
@@ -380,6 +405,7 @@ export default function MetricsPage() {
               <MoneyStatCard
                 title="Fee revenue"
                 unavailable={hides("fee_revenue_tzs")}
+                note={partial("fee_revenue_tzs")}
                 currency="TZS"
                 current={current.fee_revenue_tzs}
                 previous={previous.fee_revenue_tzs}
