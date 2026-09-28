@@ -23,15 +23,24 @@
 //      beside it and gets the same previous-window comparison every other
 //      figure on this screen gets.
 //
-// NO ARITHMETIC ON THE FIGURES THEMSELVES, ANYWHERE ON THIS SCREEN. Every
-// "change against previous" below is the current and previous values shown
-// side by side, never a computed delta or percentage -- computing one would
-// mean parsing the money fields' decimal STRINGS, which is exactly what
-// lib/darajaMetrics.ts (and, underneath it, lib/darajaMoney.ts) forbids: a
-// figure somebody will reconcile against the ledger must never pass through
-// `Number()`/`parseFloat()`/`toFixed()`. The count fields (plain JSON
-// integers) get the same side-by-side treatment for consistency, not
-// because they carry the same risk.
+// THE FIGURES ARE NEVER PARSED. THE PERCENTAGE IS NOT A FIGURE.
+//
+// Every money value is rendered straight from the decimal STRING the API
+// sent, through formatOpsMoney/formatOpsMoneyAs, and never passes through
+// `Number()`/`parseFloat()`/`toFixed()` -- a figure somebody will reconcile
+// against the ledger must survive to the pixel.
+//
+// The "↑ 18%" beside it is a different kind of thing: a RATIO between two
+// windows, rounded for reading, and nobody reconciles a percentage. Computing
+// it cannot corrupt the money on screen because the money on screen never
+// comes from that computation -- `percentChange` returns a label and touches
+// nothing else. A first version of this screen left the percentage out on the
+// grounds that computing it would be "arithmetic on money"; that over-applied
+// the rule and left the operator to do the subtraction in their head, which is
+// the one thing a metrics screen exists to save them.
+//
+// The previous window's raw value stays on screen underneath, so the
+// percentage is always checkable against the two numbers it came from.
 "use client";
 import * as React from "react";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -42,14 +51,40 @@ import { formatOpsMoney, formatOpsMoneyAs } from "@/lib/darajaMoney";
 import { useDarajaResource } from "@/lib/darajaAuth";
 import { METRICS_PATH, type MetricsResponse } from "@/lib/darajaMetrics";
 
-/** One count figure shown beside its own previous-window value -- e.g.
- * "1,234 deposits (previous window: 987)". Plain integers, so `current`/
- * `previous` are compared by eye, not computed into a delta here either. */
+/** A secondary count shown under a money figure -- e.g. "1,234 deposits
+ * (previous window: 987)". These stay side-by-side with no percentage: the
+ * percentage belongs to the headline figure above them, and a second arrow on
+ * the supporting line competes with it for the same glance. */
 type CountDetail = {
   label: string;
   current: number;
   previous: number;
 };
+
+/**
+ * "↑ 18%" / "↓ 4%" / "no change", or null when there is nothing honest to say.
+ *
+ * Accepts the decimal STRINGS the API sends (money) or plain numbers (counts).
+ * The parse here feeds ONLY the percentage -- the value shown to the operator
+ * is always formatted from the original string, never from this.
+ *
+ * Returns null, rather than a number, when:
+ *   - the previous window was zero. Growth from nothing is not a percentage;
+ *     "↑ ∞%" and "↑ 100%" are both lies. The card shows "previous window: 0"
+ *     and lets the operator read it.
+ *   - either value will not parse. Silence beats a confident wrong arrow.
+ */
+function percentChange(previous: string | number, current: string | number): string | null {
+  const before = Number(previous);
+  const after = Number(current);
+  if (!Number.isFinite(before) || !Number.isFinite(after)) return null;
+  if (before === 0) return null;
+  const pct = ((after - before) / Math.abs(before)) * 100;
+  if (!Number.isFinite(pct)) return null;
+  const rounded = Math.round(pct);
+  if (rounded === 0) return "no change";
+  return `${rounded > 0 ? "↑" : "↓"} ${Math.abs(rounded)}%`;
+}
 
 /**
  * A single money figure: the window's value, its previous-window value
@@ -79,15 +114,26 @@ function MoneyStatCard({
 }) {
   const format = (value: string) =>
     currency === "USD" ? formatOpsMoneyAs("USD", value) : formatOpsMoney(value);
+  const change = percentChange(previous, current);
   return (
     <Card>
       <CardContent className="flex flex-col gap-1.5 py-4">
         <div className="text-sm font-medium text-text-muted">{title}</div>
-        <div className="text-2xl font-semibold text-text">{format(current)}</div>
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <div className="text-2xl font-semibold text-text">{format(current)}</div>
+          {/* The ratio, not the money. The figure above is formatted from the
+              API's own string and owes nothing to this. */}
+          {change ? (
+            <span className="text-xs font-medium text-text-muted whitespace-nowrap">
+              {change}
+            </span>
+          ) : null}
+        </div>
         <div className="text-xs text-text-muted">previous window: {format(previous)}</div>
         {details?.map((d) => (
           <div key={d.label} className="text-xs text-text-muted">
-            {d.current.toLocaleString()} {d.label} (previous window: {d.previous.toLocaleString()})
+            {d.current.toLocaleString()} {d.label} (previous window:{" "}
+            {d.previous.toLocaleString()})
           </div>
         ))}
         {note ? <div className="text-xs text-warning-fg">{note}</div> : null}
@@ -120,6 +166,9 @@ function CumulativeStatCard({
   newCurrent: number;
   newPrevious: number;
 }) {
+  // Only the FLOW gets a comparison. The total above is a snapshot as at the
+  // window's end, and a percentage on it would read as growth during the window.
+  const newChange = percentChange(newPrevious, newCurrent);
   return (
     <Card>
       <CardContent className="flex flex-col gap-1.5 py-4">
@@ -128,8 +177,15 @@ function CumulativeStatCard({
         <div className="text-xs text-text-faint">
           as at the end of the window -- not a flow, so there is no previous-window comparison
         </div>
-        <div className="mt-1 text-sm font-medium text-text">
-          {newCurrent.toLocaleString()} {newLabel} this window
+        <div className="mt-1 flex items-baseline gap-2 flex-wrap">
+          <span className="text-sm font-medium text-text">
+            {newCurrent.toLocaleString()} {newLabel} this window
+          </span>
+          {newChange ? (
+            <span className="text-xs font-medium text-text-muted whitespace-nowrap">
+              {newChange}
+            </span>
+          ) : null}
         </div>
         <div className="text-xs text-text-muted">
           previous window: {newPrevious.toLocaleString()}
