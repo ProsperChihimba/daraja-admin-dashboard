@@ -25,6 +25,7 @@ import { formatOpsMoney, formatOpsMoneyAs } from "@/lib/darajaMoney";
 import { age } from "@/components/daraja/HealthStrip";
 import { RefreshControl } from "@/components/daraja/RefreshControl";
 import { UniversalRateCard } from "@/components/daraja/UniversalRateCard";
+import { WithdrawFloatRequest } from "@/components/daraja/WithdrawFloatRequest";
 import { useDarajaResource } from "@/lib/darajaAuth";
 import { createActionRequest, extractOpsErrorMessage } from "@/lib/darajaActions";
 import {
@@ -246,6 +247,11 @@ export default function TreasuryPage() {
     TREASURY_PATH,
   );
   const [target, setTarget] = React.useState<TreasuryWallet | null>(null);
+  // The float row's own control. Separate state from `target`, which drives
+  // the sweep modal: a withdrawal is the opposite direction (money leaving
+  // the pool entirely, not moving between two wallets inside it) and shares
+  // none of the sweep's fields.
+  const [withdrawOpen, setWithdrawOpen] = React.useState(false);
   const [requestedMessage, setRequestedMessage] = React.useState<string | null>(null);
 
   // The provider card's own `?live=1` refresh, entirely separate from the
@@ -350,8 +356,21 @@ export default function TreasuryPage() {
       key: "action",
       header: "",
       render: (w) => {
-        // The float account is never itself swept from this screen.
-        if (!w.action) return null;
+        // The float account is never SWEPT -- it is what everything else is
+        // swept into -- but it is the one wallet money can be withdrawn FROM,
+        // out of the pool to a bank account. Until this button existed that
+        // was a management command plus a hand-driven Selcom API call, done
+        // by one person with no preview and no second pair of eyes.
+        if (!w.action) {
+          if (w.key !== "float") return null;
+          return (
+            <div className="flex flex-col items-end gap-1">
+              <Button size="sm" variant="outline" onClick={() => setWithdrawOpen(true)}>
+                Request withdrawal
+              </Button>
+            </div>
+          );
+        }
         const disabled = !w.designated;
         return (
           <div className="flex flex-col items-end gap-1">
@@ -442,6 +461,20 @@ export default function TreasuryPage() {
         }}
         onRequested={(message) => {
           setTarget(null);
+          setRequestedMessage(message);
+          refetch();
+        }}
+      />
+      <WithdrawFloatRequest
+        open={withdrawOpen}
+        onOpenChange={setWithdrawOpen}
+        // Read off the same wallets list the table renders, by key and never
+        // by position. Null when the row is missing or its balance could not
+        // be read -- the modal says "could not be read" rather than showing
+        // a confident 0.00 next to a field asking how much to send.
+        floatBalance={data?.wallets.find((w) => w.key === "float")?.balance ?? null}
+        onRequested={(message) => {
+          setWithdrawOpen(false);
           setRequestedMessage(message);
           refetch();
         }}
