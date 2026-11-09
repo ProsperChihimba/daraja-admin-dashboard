@@ -119,6 +119,20 @@ function ProviderBalanceCard({
   );
 }
 
+// A sweep action's `target_ref` is a FIXED LABEL per action_type, enforced by
+// dashboard/actions/treasury.py::_check_target_ref -- NOT the row key. For most
+// rows the key happens to equal that label, but the pre-designation Revenue row
+// has key "old_revenue" while carrying `treasury.sweep_revenue`, whose target is
+// always "revenue" (the action resolves its source through
+// find_system(REVENUE), which follows the designation). Sending the key there
+// makes the backend refuse with "target_ref 'old_revenue' does not name this
+// action". Resolve the label from the action, with the key as a safe fallback.
+const SWEEP_TARGET_REF: Record<string, string> = {
+  "treasury.sweep_card_topups": "card_topups",
+  "treasury.sweep_lipa_payouts": "lipa",
+  "treasury.sweep_revenue": "revenue",
+};
+
 /**
  * Requesting a sweep. `wallet.action` is the row's own `action_type`
  * ("treasury.sweep_card_topups" / "treasury.sweep_lipa_payouts") -- never
@@ -168,7 +182,7 @@ function SweepRequestModal({
       if (trimmed) params.amount = trimmed;
       await createActionRequest({
         action_type: actionType,
-        target_ref: w.key,
+        target_ref: SWEEP_TARGET_REF[actionType] ?? w.key,
         reason,
         params,
       });
