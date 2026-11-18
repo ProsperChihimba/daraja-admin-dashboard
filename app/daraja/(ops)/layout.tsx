@@ -31,7 +31,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import AppSidebar from "@/components/shell/AppSidebar";
 import Topbar from "@/components/shell/Topbar";
-import { darajaSidebarConfig } from "@/config/sidebar";
+import { darajaSidebarFor } from "@/config/sidebar";
 import { LoadingBlock } from "@/components/common/PageStates";
 import darajaApi, { getOpsAccess } from "@/lib/darajaApi";
 import { darajaLogout, darajaMe } from "@/lib/darajaAuth";
@@ -146,7 +146,7 @@ export default function DarajaOpsLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen bg-bg">
       <AppSidebar
-        groups={darajaSidebarConfig}
+        groups={darajaSidebarFor(user)}
         badges={{ "/daraja/actions": pendingCount, "/daraja/alerts": openAlerts }}
       />
       <div className="flex min-w-0 flex-1 flex-col">
